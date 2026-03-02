@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Cobros App - Gestión de Cobros</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💼</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- SIDEBAR -->
+  <nav id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-brand">
+        <span class="brand-icon">💼</span>
+        <div class="brand-text">
+          <span class="brand-name">Cobros App</span>
+          <span class="brand-sub">Sistema de Gestión</span>
+        </div>
+      </div>
+      <button id="btn-toggle-sidebar" class="btn-toggle-sidebar" onclick="toggleSidebar()">◀</button>
+    </div>
+    <div class="sidebar-menu">
+      <button class="menu-item active" data-tab="dashboard" onclick="switchTab('dashboard')">
+        <span class="menu-icon">📊</span><span class="menu-label">Dashboard</span>
+      </button>
+      <button class="menu-item" data-tab="cartera" onclick="switchTab('cartera')">
+        <span class="menu-icon">📋</span><span class="menu-label">Cartera</span>
+      </button>
+      <button class="menu-item" data-tab="hoy" onclick="switchTab('hoy')">
+        <span class="menu-icon">📞</span><span class="menu-label">Gestión Hoy</span>
+      </button>
+      <button class="menu-item" data-tab="historial" onclick="switchTab('historial')">
+        <span class="menu-icon">📜</span><span class="menu-label">Historial</span>
+      </button>
+      <button class="menu-item" data-tab="pagos" onclick="switchTab('pagos')">
+        <span class="menu-icon">💰</span><span class="menu-label">Pagos</span>
+      </button>
+    </div>
+    <div class="sidebar-footer">
+      <button class="btn-refresh" onclick="cargarTodosDatos()">
+        <span>🔄</span><span class="menu-label">Actualizar Datos</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- OVERLAY MOBILE -->
+  <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+  <!-- MAIN CONTENT -->
+  <main id="main-content" class="main-content">
+    <!-- MOBILE HEADER -->
+    <div class="mobile-header">
+      <button class="btn-menu-mobile" onclick="toggleSidebar()">☰</button>
+      <span class="mobile-title">Cobros App</span>
+      <button class="btn-refresh-mobile" onclick="cargarTodosDatos()">🔄</button>
+    </div>
+
+    <!-- LOADING -->
+    <div id="loading" class="loading-container" style="display:none;">
+      <div class="spinner"></div>
+      <p>Cargando datos...</p>
+    </div>
+
+    <!-- TAB: DASHBOARD -->
+    <div id="tab-dashboard" class="tab-content active">
+      <div class="page-header">
+        <div>
+          <h2 class="page-title">Dashboard</h2>
+          <p class="page-subtitle" id="ciclo-info">Cargando ciclo...</p>
+        </div>
+        <div id="dias-cierre" class="badge-cierre">-- días para cierre</div>
+      </div>
+
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card">
+          <div class="stat-content">
+            <span class="stat-label">Cartera Total</span>
+            <span class="stat-value" id="stat-cartera">L 0.00</span>
+            <span class="stat-sub" id="stat-clientes">0 clientes activos</span>
+          </div>
+          <div class="stat-icon" style="background:rgba(59,130,246,.1)">💼</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-content">
+            <span class="stat-label">Cuotas Pendientes</span>
+            <span class="stat-value" id="stat-cuotas">L 0.00</span>
+            <span class="stat-sub">Por cobrar este ciclo</span>
+          </div>
+          <div class="stat-icon" style="background:rgba(245,158,11,.1)">📅</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-content">
+            <span class="stat-label">Recuperado</span>
+            <span class="stat-value" id="stat-recuperado">L 0.00</span>
+            <span class="stat-sub" id="stat-pagos-count">0 pagos</span>
+          </div>
+          <div class="stat-icon" style="background:rgba(22,163,74,.1)">💰</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-content">
+            <span class="stat-label">Gestiones Hoy</span>
+            <span class="stat-value" id="stat-gestiones">0</span>
+            <span class="stat-sub" id="stat-contactados">0/0 contactados</span>
+          </div>
+          <div class="stat-icon" style="background:rgba(139,92,246,.1)">📞</div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="card">
+          <h3 class="card-title">Avance del Ciclo</h3>
+          <div id="progress-bars"></div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Gestiones de Hoy</h3>
+          <div id="estados-hoy"></div>
+        </div>
+      </div>
+
+      <div id="promesas-vencidas-container" class="card card-warning" style="display:none;">
+        <h3 class="card-title card-title-warning">⚠️ Promesas Vencidas (<span id="promesas-count">0</span>)</h3>
+        <div id="promesas-lista"></div>
+      </div>
+    </div>
+
+    <!-- TAB: CARTERA -->
+    <div id="tab-cartera" class="tab-content">
+      <h2 class="page-title">Cartera de Clientes</h2>
+      <div class="filters-bar">
+        <input type="text" id="filtro-texto" class="input-filter" placeholder="🔍 Buscar cliente..." oninput="filtrarCartera()">
+        <select id="filtro-dia-semana" class="select-filter" onchange="filtrarCartera()">
+          <option value="">Día semana</option>
+          <option value="lunes">Lunes</option>
+          <option value="martes">Martes</option>
+          <option value="miércoles">Miércoles</option>
+          <option value="jueves">Jueves</option>
+          <option value="viernes">Viernes</option>
+          <option value="sábado">Sábado</option>
+        </select>
+        <select id="filtro-dia-mes" class="select-filter" onchange="filtrarCartera()">
+          <option value="">Día del mes</option>
+        </select>
+        <select id="filtro-estado" class="select-filter" onchange="filtrarCartera()">
+          <option value="">Estado</option>
+          <option value="pagado">✅ Pagado</option>
+          <option value="promesa">🤝 Promesa</option>
+          <option value="no_contesta">📵 No Contesta</option>
+          <option value="mensaje_enviado">💬 Mensaje</option>
+          <option value="rechaza_pago">❌ Rechaza</option>
+          <option value="ilocalizable">❓ Ilocalizable</option>
+          <option value="pendiente">⏳ Pendiente</option>
+        </select>
+        <select id="filtro-orden" class="select-filter" onchange="filtrarCartera()">
+          <option value="balance_desc">Mayor balance</option>
+          <option value="balance_asc">Menor balance</option>
+          <option value="cuotas_desc">Mayor cuota</option>
+          <option value="nombre">Nombre A-Z</option>
+        </select>
+      </div>
+      <div class="results-count" id="cartera-count">0 clientes activos</div>
+      <div id="cartera-lista" class="items-list"></div>
+    </div>
+
+    <!-- TAB: GESTIÓN HOY -->
+    <div id="tab-hoy" class="tab-content">
+      <h2 class="page-title">Gestión de Hoy</h2>
+      <p class="page-subtitle" id="hoy-info"></p>
+      <div id="hoy-pendientes"></div>
+      <div id="hoy-completados"></div>
+      <div id="hoy-vacio" class="empty-state" style="display:none;">
+        <span class="empty-icon">📭</span>
+        <span>No hay clientes programados para hoy</span>
+      </div>
+    </div>
+
+    <!-- TAB: HISTORIAL -->
+    <div id="tab-historial" class="tab-content">
+      <h2 class="page-title">Historial de Gestiones</h2>
+      <div class="filters-bar">
+        <input type="date" id="filtro-hist-fecha" class="input-filter" onchange="filtrarHistorial()">
+        <select id="filtro-hist-estado" class="select-filter" onchange="filtrarHistorial()">
+          <option value="">Todos los estados</option>
+          <option value="pagado">✅ Pagado</option>
+          <option value="promesa">🤝 Promesa</option>
+          <option value="no_contesta">📵 No Contesta</option>
+          <option value="mensaje_enviado">💬 Mensaje</option>
+          <option value="rechaza_pago">❌ Rechaza</option>
+          <option value="ilocalizable">❓ Ilocalizable</option>
+        </select>
+        <button class="btn-secondary" onclick="limpiarFiltrosHistorial()">Limpiar</button>
+      </div>
+      <div class="results-count" id="historial-count">0 gestiones</div>
+      <div id="historial-lista" class="items-list"></div>
+    </div>
+
+    <!-- TAB: PAGOS -->
+    <div id="tab-pagos" class="tab-content">
+      <h2 class="page-title">Pagos Realizados</h2>
+      <div class="filters-bar">
+        <input type="text" id="filtro-pagos-texto" class="input-filter" placeholder="🔍 Buscar cliente..." oninput="filtrarPagos()">
+        <div class="badge-total" id="pagos-total">Total: L 0.00</div>
+      </div>
+      <div id="pagos-lista" class="items-list"></div>
+    </div>
+  </main>
+
+  <!-- MODAL GESTIONAR -->
+  <div id="modal-gestionar" class="modal-overlay" style="display:none;" onclick="cerrarModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title" id="modal-cliente-nombre"></h3>
+          <p class="modal-subtitle" id="modal-cliente-info"></p>
+        </div>
+        <button class="btn-close" onclick="cerrarModal()">✕</button>
+      </div>
+
+      <div class="modal-section" id="modal-prestamos-section">
+        <h4 class="section-title">Préstamos Activos</h4>
+        <div id="modal-prestamos-lista"></div>
+      </div>
+
+      <div class="modal-section">
+        <h4 class="section-title">Registrar Gestión</h4>
+        <div class="estados-grid" id="modal-estados"></div>
+        <div id="promesa-fecha-container" class="field-group" style="display:none;">
+          <label class="field-label">Fecha de Promesa</label>
+          <input type="date" id="modal-fecha-promesa" class="input-filter">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Comentario</label>
+          <textarea id="modal-comentario" class="textarea-field" placeholder="Notas de la gestión..." rows="3"></textarea>
+        </div>
+        <button id="btn-guardar-gestion" class="btn-primary btn-full" onclick="guardarGestionModal()" disabled>
+          Guardar Gestión
+        </button>
+      </div>
+
+      <div class="modal-section" id="modal-historial-section" style="display:none;">
+        <h4 class="section-title">Historial de Gestiones</h4>
+        <div id="modal-historial-lista"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" class="toast" style="display:none;"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
