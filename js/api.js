@@ -1,5 +1,6 @@
 // ============================================
 // API - Conexión con Google Apps Script
+// CORREGIDO: Manejo de CORS con Google Apps Script
 // ============================================
 
 const API = {
@@ -14,36 +15,53 @@ const API = {
         }
       });
 
-      const response = await fetch(url.toString());
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        redirect: 'follow',
+      });
+
       if (!response.ok) throw new Error('Error de red: ' + response.status);
       
-      const data = await response.json();
-      if (data.error) throw new Error(data.error);
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch(e) {
+        throw new Error('Respuesta no válida del servidor');
+      }
       
+      if (data.error) throw new Error(data.error);
       return data;
     } catch (err) {
-      console.error(`API GET ${action}:`, err);
+      console.error('API GET ' + action + ':', err);
       throw err;
     }
   },
 
-  // POST request
+  // POST request (para guardar gestiones)
   async post(action, body = {}) {
     try {
       const response = await fetch(CONFIG.API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action, ...body }),
       });
 
       if (!response.ok) throw new Error('Error de red: ' + response.status);
       
-      const data = await response.json();
-      if (data.error) throw new Error(data.error);
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch(e) {
+        throw new Error('Respuesta no válida del servidor');
+      }
       
+      if (data.error) throw new Error(data.error);
       return data;
     } catch (err) {
-      console.error(`API POST ${action}:`, err);
+      console.error('API POST ' + action + ':', err);
       throw err;
     }
   },
