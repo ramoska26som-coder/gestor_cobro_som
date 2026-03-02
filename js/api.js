@@ -1,6 +1,5 @@
 // ============================================
 // API - Conexión con Google Apps Script
-// CORREGIDO: Manejo de CORS con Google Apps Script
 // ============================================
 
 const API = {
@@ -15,53 +14,36 @@ const API = {
         }
       });
 
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        redirect: 'follow',
-      });
-
+      const response = await fetch(url.toString());
       if (!response.ok) throw new Error('Error de red: ' + response.status);
       
-      const text = await response.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch(e) {
-        throw new Error('Respuesta no válida del servidor');
-      }
-      
+      const data = await response.json();
       if (data.error) throw new Error(data.error);
+      
       return data;
     } catch (err) {
-      console.error('API GET ' + action + ':', err);
+      console.error(`API GET ${action}:`, err);
       throw err;
     }
   },
 
-  // POST request (para guardar gestiones)
+  // POST request
   async post(action, body = {}) {
     try {
       const response = await fetch(CONFIG.API_URL, {
         method: 'POST',
-        redirect: 'follow',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ action, ...body }),
       });
 
       if (!response.ok) throw new Error('Error de red: ' + response.status);
       
-      const text = await response.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch(e) {
-        throw new Error('Respuesta no válida del servidor');
-      }
-      
+      const data = await response.json();
       if (data.error) throw new Error(data.error);
+      
       return data;
     } catch (err) {
-      console.error('API POST ' + action + ':', err);
+      console.error(`API POST ${action}:`, err);
       throw err;
     }
   },

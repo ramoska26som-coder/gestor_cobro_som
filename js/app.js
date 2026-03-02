@@ -181,10 +181,10 @@ function cargarDatosEjemplo() {
   ];
 
   DATOS.gestiones = [
-    { cliente:"Carmen Dalila Vasquez Ferrera", estado:"promesa", comentario:"Dice que paga el viernes", fechaPromesa:"2026-02-28", fecha:"2026-02-25", hora:"10:30:00", gestor:"Gestor 1" },
-    { cliente:"Gladys Carolina Castillo Ramirez", estado:"mensaje_enviado", comentario:"Recordatorio WhatsApp", fechaPromesa:"", fecha:hoyStr, hora:"08:15:00", gestor:"Gestor 1" },
-    { cliente:"Angelica Patricia Pineda Carbajal", estado:"pagado", comentario:"Pagó cuota en Ficohsa", fechaPromesa:"", fecha:hoyStr, hora:"09:45:00", gestor:"Gestor 1" },
-    { cliente:"Keylin Roxana Mejia Garcia", estado:"no_contesta", comentario:"3 intentos de llamada", fechaPromesa:"", fecha:hoyStr, hora:"10:00:00", gestor:"Gestor 1" },
+    { cliente:"Carmen Dalila Vasquez Ferrera", estado:"promesa", comentario:"Dice que paga el viernes", fechaPromesa:"2026-02-28", montoPagado:0, montoPromesa:728.70, fecha:"2026-02-25", hora:"10:30:00", gestor:"Gestor 1" },
+    { cliente:"Gladys Carolina Castillo Ramirez", estado:"mensaje_enviado", comentario:"Recordatorio WhatsApp", fechaPromesa:"", montoPagado:0, montoPromesa:0, fecha:hoyStr, hora:"08:15:00", gestor:"Gestor 1" },
+    { cliente:"Angelica Patricia Pineda Carbajal", estado:"pagado", comentario:"Pagó cuota en Ficohsa", fechaPromesa:"", montoPagado:2840, montoPromesa:0, fecha:hoyStr, hora:"09:45:00", gestor:"Gestor 1" },
+    { cliente:"Keylin Roxana Mejia Garcia", estado:"no_contesta", comentario:"3 intentos de llamada", fechaPromesa:"", montoPagado:0, montoPromesa:0, fecha:hoyStr, hora:"10:00:00", gestor:"Gestor 1" },
   ];
 }
 
@@ -202,43 +202,78 @@ function renderDashboard() {
   const contactados = [...new Set(gHoy.map(g => g.cliente))];
   const pagadosHoy = gHoy.filter(g => g.estado === 'pagado').length;
 
+  // NUEVO: Cobrado hoy (de pagos + montos en gestiones de hoy)
+  const pagosHoy = DATOS.pagos.filter(p => p.fecha === hoyStr);
+  const montoPagosHoy = pagosHoy.reduce((s, p) => s + p.valor, 0);
+  const montoGestionesHoy = gHoy
+    .filter(g => g.estado === 'pagado' && g.montoPagado)
+    .reduce((s, g) => s + (parseFloat(g.montoPagado) || 0), 0);
+  const cobradoHoy = montoPagosHoy + montoGestionesHoy;
+
+  // NUEVO: % Cobro del ciclo
+  const pctCobro = totalCuotas > 0 ? (totalRecup / totalCuotas * 100) : 0;
+
+  // NUEVO: Proyección al cierre
+  const cicloTotal = getCiclo();
+  const diasCicloTotal = Math.ceil((cicloTotal.fin - cicloTotal.inicio) / 86400000);
+  const diasTranscurridos = diasCicloTotal - cicloTotal.dias;
+  const promedioDiario = diasTranscurridos > 0 ? totalRecup / diasTranscurridos : 0;
+  const proyeccion = totalRecup + (promedioDiario * cicloTotal.dias);
+  const pctProyeccion = totalCuotas > 0 ? (proyeccion / totalCuotas * 100) : 0;
+
+  // NUEVO: Falta por cobrar
+  const faltaCobrar = Math.max(0, totalCuotas - totalRecup);
+  const clientesPagadosCiclo = new Set(DATOS.pagos.map(p => p.cliente));
+  const clientesPendientes = clientesU.filter(c => !clientesPagadosCiclo.has(c)).length;
+
   // Info ciclo
   document.getElementById('ciclo-info').textContent = 
-    `Ciclo: ${ciclo.inicio.toLocaleDateString('es-HN')} - ${ciclo.fin.toLocaleDateString('es-HN')}`;
+    'Ciclo: ' + ciclo.inicio.toLocaleDateString('es-HN') + ' - ' + ciclo.fin.toLocaleDateString('es-HN');
   
-  const dc = document.getElementById('dias-cierre');
-  dc.textContent = `${ciclo.dias} días para cierre`;
-  dc.className = 'badge-cierre ' + (ciclo.dias <= 3 ? 'danger' : ciclo.dias <= 7 ? 'warning' : 'normal');
+  const dcEl = document.getElementById('dias-cierre');
+  dcEl.textContent = ciclo.dias + ' días para cierre';
+  dcEl.className = 'badge-cierre ' + (ciclo.dias <= 3 ? 'danger' : ciclo.dias <= 7 ? 'warning' : 'normal');
 
-  // Stats
-  document.getElementById('stat-cartera').textContent = formatL(totalCartera);
-  document.getElementById('stat-clientes').textContent = `${clientesU.length} clientes activos`;
-  document.getElementById('stat-cuotas').textContent = formatL(totalCuotas);
+  // Stats FILA 1
+  document.getElementById('stat-cobrado-hoy').textContent = formatL(cobradoHoy);
+  document.getElementById('stat-cobros-hoy-count').textContent = (pagosHoy.length + pagadosHoy) + ' cobros hoy';
+  document.getElementById('stat-pct-cobro').textContent = pctCobro.toFixed(1) + '%';
+  document.getElementById('stat-pct-detalle').textContent = formatL(totalRecup) + ' de ' + formatL(totalCuotas);
   document.getElementById('stat-recuperado').textContent = formatL(totalRecup);
-  document.getElementById('stat-pagos-count').textContent = `${DATOS.pagos.length} pagos`;
+  document.getElementById('stat-pagos-count').textContent = DATOS.pagos.length + ' pagos del ciclo';
+  document.getElementById('stat-proyeccion').textContent = formatL(proyeccion);
+  document.getElementById('stat-proyeccion-pct').textContent = pctProyeccion.toFixed(1) + '% de la meta';
+
+  // Stats FILA 2
+  document.getElementById('stat-cartera').textContent = formatL(totalCartera);
+  document.getElementById('stat-clientes').textContent = clientesU.length + ' clientes activos';
+  document.getElementById('stat-cuotas').textContent = formatL(totalCuotas);
   document.getElementById('stat-gestiones').textContent = gHoy.length;
-  document.getElementById('stat-contactados').textContent = `${contactados.length}/${clientesU.length} contactados`;
+  document.getElementById('stat-contactados').textContent = contactados.length + '/' + clientesU.length + ' contactados';
+  document.getElementById('stat-falta-cobrar').textContent = formatL(faltaCobrar);
+  document.getElementById('stat-falta-clientes').textContent = clientesPendientes + ' clientes pendientes';
 
   // Progress bars
   const pbContainer = document.getElementById('progress-bars');
   pbContainer.innerHTML = '';
   const bars = [
     { label: 'Clientes Contactados Hoy', value: contactados.length, max: clientesU.length, color: '#3b82f6' },
-    { label: 'Recuperado vs Pendiente', value: totalRecup, max: totalCuotas, color: '#16a34a' },
-    { label: 'Efectividad de Cobro Hoy', value: pagadosHoy, max: gHoy.length || 1, color: '#8b5cf6' },
+    { label: '% Cobro del Ciclo', value: totalRecup, max: totalCuotas, color: '#16a34a' },
+    { label: 'Proyección vs Meta', value: proyeccion, max: totalCuotas, color: '#8b5cf6' },
+    { label: 'Efectividad Hoy', value: pagadosHoy, max: gHoy.length || 1, color: '#f59e0b' },
   ];
   bars.forEach(b => {
     const pct = b.max > 0 ? Math.min((b.value / b.max) * 100, 100) : 0;
-    pbContainer.innerHTML += `
-      <div class="progress-item">
-        <div class="progress-header">
-          <span class="progress-label">${b.label}</span>
-          <span class="progress-pct">${pct.toFixed(1)}%</span>
-        </div>
-        <div class="progress-track">
-          <div class="progress-fill" style="width:${pct}%;background:${b.color}"></div>
-        </div>
-      </div>`;
+    pbContainer.innerHTML += 
+      '<div class="progress-item">' +
+        '<div class="progress-header">' +
+          '<span class="progress-label">' + b.label + '</span>' +
+          '<span class="progress-pct">' + pct.toFixed(1) + '%</span>' +
+        '</div>' +
+        '<div class="progress-track">' +
+          '<div class="progress-fill" style="width:' + pct + '%;background:' + b.color + '"></div>' +
+        '</div>' +
+      '</div>';
   });
 
   // Estados hoy
@@ -246,11 +281,15 @@ function renderDashboard() {
   estContainer.innerHTML = '';
   CONFIG.ESTADOS.forEach(e => {
     const count = gHoy.filter(g => g.estado === e.value).length;
-    estContainer.innerHTML += `
-      <div class="estado-row">
-        <div class="estado-left"><span>${e.icon}</span><span>${e.label}</span></div>
-        <span class="estado-badge" style="background:${e.bg};color:${e.color}">${count}</span>
-      </div>`;
+    const montoEst = gHoy.filter(g => g.estado === e.value && g.montoPagado).reduce((s, g) => s + (parseFloat(g.montoPagado) || 0), 0);
+    estContainer.innerHTML += 
+      '<div class="estado-row">' +
+        '<div class="estado-left"><span>' + e.icon + '</span><span>' + e.label + '</span></div>' +
+        '<div style="display:flex;align-items:center;gap:8px">' +
+          (montoEst > 0 ? '<span style="font-size:11px;color:#16a34a;font-weight:600">' + formatL(montoEst) + '</span>' : '') +
+          '<span class="estado-badge" style="background:' + e.bg + ';color:' + e.color + '">' + count + '</span>' +
+        '</div>' +
+      '</div>';
   });
 
   // Promesas vencidas
@@ -263,11 +302,11 @@ function renderDashboard() {
   if (promVenc.length > 0) {
     pvContainer.style.display = 'block';
     document.getElementById('promesas-count').textContent = promVenc.length;
-    document.getElementById('promesas-lista').innerHTML = promVenc.slice(0, 8).map(g => `
-      <div class="promesa-item">
-        <span class="promesa-nombre">${g.cliente}</span>
-        <span class="promesa-fecha">Prometió: ${g.fechaPromesa}</span>
-      </div>`).join('');
+    document.getElementById('promesas-lista').innerHTML = promVenc.slice(0, 8).map(g => 
+      '<div class="promesa-item">' +
+        '<span class="promesa-nombre">' + g.cliente + '</span>' +
+        '<span class="promesa-fecha">Prometió: ' + g.fechaPromesa + (g.montoPromesa ? ' - ' + formatL(g.montoPromesa) : '') + '</span>' +
+      '</div>').join('');
   } else {
     pvContainer.style.display = 'none';
   }
@@ -541,7 +580,11 @@ function abrirModal(cliente) {
   document.getElementById('modal-comentario').value = '';
   document.getElementById('modal-fecha-promesa').value = '';
   document.getElementById('modal-fecha-promesa').min = hoyStr;
+  document.getElementById('modal-monto-pagado').value = '';
+  document.getElementById('modal-monto-promesa').value = '';
+  document.getElementById('monto-pagado-container').style.display = 'none';
   document.getElementById('promesa-fecha-container').style.display = 'none';
+  document.getElementById('promesa-monto-container').style.display = 'none';
   document.getElementById('btn-guardar-gestion').disabled = true;
 
   // Historial
@@ -555,10 +598,11 @@ function abrirModal(cliente) {
     hSection.style.display = 'block';
     hLista.innerHTML = hist.slice(0, 10).map(g => {
       const e = getEstadoInfo(g.estado);
+      const montoTxt = g.montoPagado ? ' — ' + formatL(g.montoPagado) : (g.montoPromesa ? ' — Prometió: ' + formatL(g.montoPromesa) : '');
       return `
         <div class="hist-item">
           <div>
-            <span class="item-badge" style="background:${e.bg};color:${e.color};font-size:10px;padding:1px 7px">${e.icon} ${e.label}</span>
+            <span class="item-badge" style="background:${e.bg};color:${e.color};font-size:10px;padding:1px 7px">${e.icon} ${e.label}${montoTxt}</span>
             ${g.comentario ? `<div class="hist-comment">${g.comentario}</div>` : ''}
             ${g.fechaPromesa ? `<div class="hist-promesa">Promesa: ${g.fechaPromesa}</div>` : ''}
           </div>
@@ -588,18 +632,39 @@ function seleccionarEstado(estado) {
     }
   });
 
+  // Mostrar/ocultar campos según estado
+  document.getElementById('monto-pagado-container').style.display = estado === 'pagado' ? 'block' : 'none';
   document.getElementById('promesa-fecha-container').style.display = estado === 'promesa' ? 'block' : 'none';
+  document.getElementById('promesa-monto-container').style.display = estado === 'promesa' ? 'block' : 'none';
+  
+  // Pre-llenar monto con la cuota del cliente
+  if (estado === 'pagado' && clienteActual) {
+    document.getElementById('modal-monto-pagado').value = clienteActual.totalCuo.toFixed(2);
+  }
+  if (estado === 'promesa' && clienteActual) {
+    document.getElementById('modal-monto-promesa').value = clienteActual.totalCuo.toFixed(2);
+  }
+
   document.getElementById('btn-guardar-gestion').disabled = false;
 }
 
 async function guardarGestionModal() {
   if (!estadoSeleccionado || !clienteActual) return;
 
+  const montoPagado = estadoSeleccionado === 'pagado' 
+    ? parseFloat(document.getElementById('modal-monto-pagado').value) || 0 
+    : 0;
+  const montoPromesa = estadoSeleccionado === 'promesa'
+    ? parseFloat(document.getElementById('modal-monto-promesa').value) || 0
+    : 0;
+
   const gestion = {
     cliente: clienteActual.cliente,
     estado: estadoSeleccionado,
     comentario: document.getElementById('modal-comentario').value,
     fechaPromesa: estadoSeleccionado === 'promesa' ? document.getElementById('modal-fecha-promesa').value : '',
+    montoPagado: montoPagado,
+    montoPromesa: montoPromesa,
     fecha: hoyStr,
     hora: new Date().toLocaleTimeString('es-HN'),
     gestor: CONFIG.GESTOR_NOMBRE,
@@ -611,7 +676,8 @@ async function guardarGestionModal() {
   // Intentar guardar en API
   try {
     await API.guardarGestion(gestion);
-    showToast('✅ Gestión guardada en Google Sheets', 'success');
+    const montoMsg = montoPagado > 0 ? ' — ' + formatL(montoPagado) : '';
+    showToast('✅ Gestión guardada' + montoMsg, 'success');
   } catch (err) {
     showToast('💾 Guardado localmente (sin conexión a Sheets)', '');
   }

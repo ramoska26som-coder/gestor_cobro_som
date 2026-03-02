@@ -77,7 +77,44 @@
         <div id="dias-cierre" class="badge-cierre">-- días para cierre</div>
       </div>
 
+      <!-- FILA 1: Cobro de hoy y % cobro -->
       <div class="stats-grid" id="stats-grid">
+        <div class="stat-card stat-highlight-green">
+          <div class="stat-content">
+            <span class="stat-label">Cobrado Hoy</span>
+            <span class="stat-value" id="stat-cobrado-hoy">L 0.00</span>
+            <span class="stat-sub" id="stat-cobros-hoy-count">0 cobros hoy</span>
+          </div>
+          <div class="stat-icon" style="background:rgba(22,163,74,.15)">💵</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-content">
+            <span class="stat-label">% Cobro del Ciclo</span>
+            <span class="stat-value" id="stat-pct-cobro">0%</span>
+            <span class="stat-sub" id="stat-pct-detalle">L 0 de L 0</span>
+          </div>
+          <div class="stat-icon" style="background:rgba(59,130,246,.15)">📊</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-content">
+            <span class="stat-label">Recuperado Ciclo</span>
+            <span class="stat-value" id="stat-recuperado">L 0.00</span>
+            <span class="stat-sub" id="stat-pagos-count">0 pagos</span>
+          </div>
+          <div class="stat-icon" style="background:rgba(22,163,74,.1)">💰</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-content">
+            <span class="stat-label">Proyección al Cierre</span>
+            <span class="stat-value" id="stat-proyeccion">L 0.00</span>
+            <span class="stat-sub" id="stat-proyeccion-pct">0% de la meta</span>
+          </div>
+          <div class="stat-icon" style="background:rgba(139,92,246,.15)">🎯</div>
+        </div>
+      </div>
+
+      <!-- FILA 2: Cartera y gestiones -->
+      <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-content">
             <span class="stat-label">Cartera Total</span>
@@ -96,19 +133,19 @@
         </div>
         <div class="stat-card">
           <div class="stat-content">
-            <span class="stat-label">Recuperado</span>
-            <span class="stat-value" id="stat-recuperado">L 0.00</span>
-            <span class="stat-sub" id="stat-pagos-count">0 pagos</span>
-          </div>
-          <div class="stat-icon" style="background:rgba(22,163,74,.1)">💰</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-content">
             <span class="stat-label">Gestiones Hoy</span>
             <span class="stat-value" id="stat-gestiones">0</span>
             <span class="stat-sub" id="stat-contactados">0/0 contactados</span>
           </div>
           <div class="stat-icon" style="background:rgba(139,92,246,.1)">📞</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-content">
+            <span class="stat-label">Falta por Cobrar</span>
+            <span class="stat-value" id="stat-falta-cobrar">L 0.00</span>
+            <span class="stat-sub" id="stat-falta-clientes">0 clientes pendientes</span>
+          </div>
+          <div class="stat-icon" style="background:rgba(220,38,38,.1)">⏳</div>
         </div>
       </div>
 
@@ -229,9 +266,17 @@
       <div class="modal-section">
         <h4 class="section-title">Registrar Gestión</h4>
         <div class="estados-grid" id="modal-estados"></div>
+        <div id="monto-pagado-container" class="field-group" style="display:none;">
+          <label class="field-label">Monto Pagado (L)</label>
+          <input type="number" id="modal-monto-pagado" class="input-filter" placeholder="0.00" step="0.01" min="0" style="width:100%">
+        </div>
         <div id="promesa-fecha-container" class="field-group" style="display:none;">
           <label class="field-label">Fecha de Promesa</label>
-          <input type="date" id="modal-fecha-promesa" class="input-filter">
+          <input type="date" id="modal-fecha-promesa" class="input-filter" style="width:100%">
+        </div>
+        <div id="promesa-monto-container" class="field-group" style="display:none;">
+          <label class="field-label">Monto Prometido (L)</label>
+          <input type="number" id="modal-monto-promesa" class="input-filter" placeholder="0.00" step="0.01" min="0" style="width:100%">
         </div>
         <div class="field-group">
           <label class="field-label">Comentario</label>

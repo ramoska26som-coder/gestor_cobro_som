@@ -119,7 +119,9 @@ function getGestiones(fechaInicio, fechaFin) {
       estado: f[3],
       comentario: f[4] || '',
       fechaPromesa: fmtF(f[5]),
-      gestor: f[6] || ''
+      montoPagado: parseFloat(f[6]) || 0,
+      montoPromesa: parseFloat(f[7]) || 0,
+      gestor: f[8] || ''
     });
   }
   return { success: true, data: gestiones, total: gestiones.length };
@@ -138,6 +140,8 @@ function guardarGestion(g) {
     g.estado,
     g.comentario || '',
     g.fechaPromesa || '',
+    parseFloat(g.montoPagado) || 0,
+    parseFloat(g.montoPromesa) || 0,
     g.gestor || 'Gestor 1'
   ];
   hoja.appendRow(fila);
@@ -153,8 +157,10 @@ function guardarGestion(g) {
   };
   const uf = hoja.getLastRow();
   if (colores[g.estado]) {
-    hoja.getRange(uf, 1, 1, 7).setBackground(colores[g.estado]);
+    hoja.getRange(uf, 1, 1, 9).setBackground(colores[g.estado]);
   }
+  if (parseFloat(g.montoPagado) > 0) hoja.getRange(uf, 7).setNumberFormat('#,##0.00');
+  if (parseFloat(g.montoPromesa) > 0) hoja.getRange(uf, 8).setNumberFormat('#,##0.00');
   return { success: true, message: 'Gestión guardada correctamente' };
 }
 
@@ -220,8 +226,8 @@ function fmtFH(f) {
 
 function crearHojaGestiones(ss) {
   const h = ss.insertSheet(HOJA_GESTIONES);
-  h.appendRow(['Fecha','Hora','Cliente','Estado','Comentario','Fecha Promesa','Gestor']);
-  const r = h.getRange(1, 1, 1, 7);
+  h.appendRow(['Fecha','Hora','Cliente','Estado','Comentario','Fecha Promesa','Monto Pagado','Monto Promesa','Gestor']);
+  const r = h.getRange(1, 1, 1, 9);
   r.setFontWeight('bold');
   r.setBackground('#1e293b');
   r.setFontColor('#ffffff');
@@ -231,7 +237,9 @@ function crearHojaGestiones(ss) {
   h.setColumnWidth(4, 150);
   h.setColumnWidth(5, 300);
   h.setColumnWidth(6, 120);
-  h.setColumnWidth(7, 120);
+  h.setColumnWidth(7, 130);
+  h.setColumnWidth(8, 130);
+  h.setColumnWidth(9, 120);
   h.setFrozenRows(1);
   return h;
 }

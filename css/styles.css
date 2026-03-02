@@ -222,6 +222,12 @@ body {
   font-size: 18px; flex-shrink: 0;
 }
 
+.stat-highlight-green {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-color: #86efac;
+}
+.stat-highlight-green .stat-value { color: #16a34a; }
+
 /* ============================================
    CARDS
    ============================================ */

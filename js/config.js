@@ -9,7 +9,7 @@
 
 const CONFIG = {
   // URL de tu Google Apps Script Web App
-  API_URL: 'https://script.google.com/macros/s/AKfycbyjLrMeHNPCBEcRRVx2m5HXhbbKnKjh7Rr8OZOxetK8d4ouodF1zoP58UtpvqBKkIvC/exec',
+  API_URL: 'https://script.google.com/macros/s/TU_ID_AQUI/exec',
   
   // Nombre del gestor (podés cambiarlo por gestor)
   GESTOR_NOMBRE: 'Gestor 1',
