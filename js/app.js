@@ -1,709 +1,415 @@
 // ============================================
-// APP.JS - Lógica Principal
+// APP v3 - Cobros Pro
 // ============================================
+let D = { prestamos: [], pagos: [], gestiones: [] };
+let USER = null, estadoSel = '', clienteAct = null;
+const hoy = new Date(), hoyStr = hoy.toISOString().split('T')[0];
 
-// --- Estado global ---
-let DATOS = {
-  prestamos: [],
-  pagos: [],
-  gestiones: [],
-  dashboard: null,
-};
-
-let estadoSeleccionado = '';
-let clienteActual = null;
-
-// --- Utilidades ---
-const hoy = new Date();
-const hoyStr = hoy.toISOString().split('T')[0];
-
-function formatL(n) {
-  return 'L ' + Number(n || 0).toLocaleString('es-HN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function getDiaSemanaHoy() {
-  return ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][hoy.getDay()];
-}
-
-function getDiaMesHoy() {
-  return hoy.getDate();
-}
-
+// ── Utilidades ──
+const fL = n => 'L ' + Number(n||0).toLocaleString('es-HN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const diaSem = () => ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][hoy.getDay()];
+const diaMes = () => hoy.getDate();
 function getCiclo() {
-  const y = hoy.getFullYear(), m = hoy.getMonth(), d = hoy.getDate();
-  const dc = CONFIG.DIA_CIERRE;
-  const inicio = d <= dc ? new Date(y, m - 1, dc + 1) : new Date(y, m, dc + 1);
-  const fin = d <= dc ? new Date(y, m, dc) : new Date(y, m + 1, dc);
-  const dias = Math.max(0, Math.ceil((fin - hoy) / 86400000));
-  return { inicio, fin, dias };
+  const y=hoy.getFullYear(),m=hoy.getMonth(),d=hoy.getDate(),dc=CONFIG.DIA_CIERRE;
+  const ini = d<=dc ? new Date(y,m-1,dc+1) : new Date(y,m,dc+1);
+  const fin = d<=dc ? new Date(y,m,dc) : new Date(y,m+1,dc);
+  return { ini, fin, dias: Math.max(0,Math.ceil((fin-hoy)/864e5)), totalDias: Math.ceil((fin-ini)/864e5) };
 }
-
-function getEstadoInfo(estado) {
-  return CONFIG.ESTADOS.find(e => e.value === estado) || CONFIG.ESTADOS[6]; // pendiente
-}
-
-function getBorderClass(estado) {
-  const map = { pagado: 'border-green', promesa: 'border-yellow', rechaza_pago: 'border-red', mensaje_enviado: 'border-blue', ilocalizable: 'border-purple', no_contesta: 'border-gray', pendiente: 'border-gray' };
-  return map[estado] || 'border-gray';
-}
-
-function getUltimaGestion(cliente) {
-  return DATOS.gestiones
-    .filter(g => g.cliente === cliente)
-    .sort((a, b) => `${b.fecha}${b.hora}`.localeCompare(`${a.fecha}${a.hora}`))[0];
-}
-
-function agruparPorCliente(prestamos) {
-  const map = {};
-  prestamos.forEach(p => {
-    if (!map[p.cliente]) {
-      map[p.cliente] = {
-        cliente: p.cliente,
-        telefono: p.telefono || '',
-        cartera: p.cartera,
-        diaPago: p.diaPago,
-        prestamos: [],
-        totalBal: 0,
-        totalCuo: 0,
-      };
-    }
-    map[p.cliente].prestamos.push(p);
-    map[p.cliente].totalBal += p.balance;
-    map[p.cliente].totalCuo += p.balanceCuotas;
+const getEst = v => CONFIG.ESTADOS.find(e=>e.value===v) || CONFIG.ESTADOS[6];
+const blClass = v => ({pagado:'bl-green',promesa:'bl-yellow',rechaza_pago:'bl-red',mensaje_enviado:'bl-blue',ilocalizable:'bl-purple'}[v]||'bl-gray');
+const ultGest = c => D.gestiones.filter(g=>g.cliente===c).sort((a,b)=>(b.fecha+b.hora).localeCompare(a.fecha+a.hora))[0];
+function agrupar(ps) {
+  const m={};
+  ps.forEach(p => {
+    if(!m[p.cliente]) m[p.cliente]={cliente:p.cliente,telefono:p.telefono||'',cartera:p.cartera,diaPago:p.diaPago,prestamos:[],totalBal:0,totalCuo:0};
+    m[p.cliente].prestamos.push(p); m[p.cliente].totalBal+=p.balance; m[p.cliente].totalCuo+=p.balanceCuotas;
   });
-  return Object.values(map);
+  return Object.values(m);
+}
+function toast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type==='success'?'ok':type==='error'?'err':'');t.style.display='block';setTimeout(()=>t.style.display='none',3500)}
+
+// ══════════════════════════════════════
+// LOGIN / SESIÓN
+// ══════════════════════════════════════
+function initLogin() {
+  const sel = document.getElementById('login-usuario');
+  sel.innerHTML = '<option value="">Seleccionar usuario...</option>';
+  CONFIG.USUARIOS.forEach(u => {
+    sel.innerHTML += '<option value="'+u.id+'">'+u.nombre+' ('+CONFIG.ROLES[u.rol].label+')</option>';
+  });
+  // Check session
+  const saved = sessionStorage.getItem('cobros_user');
+  if (saved) { USER = JSON.parse(saved); mostrarApp(); }
 }
 
-function showToast(msg, type = '') {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast ' + type;
-  t.style.display = 'block';
-  setTimeout(() => { t.style.display = 'none'; }, 3000);
+function iniciarSesion() {
+  const uid = document.getElementById('login-usuario').value;
+  const pass = document.getElementById('login-pass').value;
+  const err = document.getElementById('login-error');
+  if (!uid) { err.textContent = 'Seleccioná un usuario'; return; }
+  const u = CONFIG.USUARIOS.find(x => x.id === uid);
+  if (!u) { err.textContent = 'Usuario no encontrado'; return; }
+  if (u.pass !== pass) { err.textContent = 'Contraseña incorrecta'; return; }
+  USER = u;
+  sessionStorage.setItem('cobros_user', JSON.stringify(u));
+  err.textContent = '';
+  mostrarApp();
 }
 
-function showLoading(show) {
-  document.getElementById('loading').style.display = show ? 'flex' : 'none';
+function cerrarSesion() {
+  USER = null;
+  sessionStorage.removeItem('cobros_user');
+  document.getElementById('app-container').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-pass').value = '';
 }
 
-// --- Sidebar & Navigation ---
+function mostrarApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-container').style.display = 'flex';
+
+  // User info
+  document.getElementById('user-avatar').textContent = USER.avatar || USER.nombre[0];
+  document.getElementById('user-name').textContent = USER.nombre;
+  document.getElementById('user-role-label').textContent = CONFIG.ROLES[USER.rol].label;
+  document.getElementById('sidebar-user-role').textContent = CONFIG.ROLES[USER.rol].label;
+
+  // Build menu based on role
+  const perms = CONFIG.ROLES[USER.rol];
+  const menu = document.getElementById('sidebar-menu');
+  menu.innerHTML = '';
+  CONFIG.TABS.filter(t => perms.tabs.includes(t.id)).forEach(t => {
+    menu.innerHTML += '<button class="menu-item'+(t.id==='dashboard'?' active':'')+'" data-tab="'+t.id+'" onclick="switchTab(\''+t.id+'\')"><span class="menu-icon">'+t.icon+'</span><span class="menu-label">'+t.label+'</span></button>';
+  });
+  // Add refresh
+  menu.innerHTML += '<button class="menu-item" onclick="cargarTodosDatos()" style="margin-top:8px;opacity:.7"><span class="menu-icon">🔄</span><span class="menu-label">Actualizar</span></button>';
+
+  // Populate filter selects
+  populateFilters();
+  cargarTodosDatos();
+}
+
+function populateFilters() {
+  // Día del mes
+  const dm = document.getElementById('f-dm');
+  if (dm && dm.options.length <= 1) {
+    for(let i=1;i<=31;i++) dm.innerHTML+='<option value="'+i+'">Día '+i+'</option>';
+  }
+  // Estados en filtros
+  ['f-est','fh-est'].forEach(id => {
+    const s=document.getElementById(id);
+    if(s && s.options.length<=1) CONFIG.ESTADOS.forEach(e => s.innerHTML+='<option value="'+e.value+'">'+e.icon+' '+e.label+'</option>');
+  });
+}
+
+// ══════════════════════════════════════
+// SIDEBAR / TABS
+// ══════════════════════════════════════
 function toggleSidebar() {
-  const sb = document.getElementById('sidebar');
-  const ov = document.getElementById('sidebar-overlay');
-  const isMobile = window.innerWidth <= 768;
-
-  if (isMobile) {
-    sb.classList.toggle('open');
-    ov.classList.toggle('show');
-  } else {
-    sb.classList.toggle('collapsed');
-  }
+  const sb=document.getElementById('sidebar'),ov=document.getElementById('sidebar-overlay');
+  if(window.innerWidth<=768){sb.classList.toggle('open');ov.classList.toggle('show')}
+  else sb.classList.toggle('mini');
+}
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.menu-item').forEach(m=>m.classList.remove('active'));
+  const tab=document.getElementById('tab-'+id);
+  if(tab) tab.classList.add('active');
+  const mi=document.querySelector('.menu-item[data-tab="'+id+'"]');
+  if(mi) mi.classList.add('active');
+  if(window.innerWidth<=768){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebar-overlay').classList.remove('show')}
+  switch(id){case 'dashboard':renderDash();break;case 'cartera':filtrarCartera();break;case 'hoy':renderHoy();break;case 'historial':renderHist();break;case 'pagos':filtrarPagos();break;case 'usuarios':renderUsers();break}
 }
 
-function switchTab(tab) {
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
-  
-  document.getElementById('tab-' + tab).classList.add('active');
-  document.querySelector(`.menu-item[data-tab="${tab}"]`).classList.add('active');
-
-  // Cerrar sidebar en mobile
-  if (window.innerWidth <= 768) {
-    document.getElementById('sidebar').classList.remove('open');
-    document.getElementById('sidebar-overlay').classList.remove('show');
-  }
-
-  // Renderizar contenido del tab
-  switch(tab) {
-    case 'dashboard': renderDashboard(); break;
-    case 'cartera': renderCartera(); break;
-    case 'hoy': renderGestionHoy(); break;
-    case 'historial': renderHistorial(); break;
-    case 'pagos': renderPagos(); break;
-  }
-}
-
-// ============================================
+// ══════════════════════════════════════
 // CARGA DE DATOS
-// ============================================
+// ══════════════════════════════════════
 async function cargarTodosDatos() {
-  showLoading(true);
-  
+  document.getElementById('loading').style.display='flex';
   try {
-    // Intentar cargar desde API
-    const [prestRes, pagosRes, gestRes] = await Promise.all([
-      API.getPrestamos(),
-      API.getPagos(),
-      API.getGestiones(),
-    ]);
-
-    DATOS.prestamos = prestRes.data || [];
-    DATOS.pagos = pagosRes.data || [];
-    DATOS.gestiones = gestRes.data || [];
-    
-    showToast('✅ Datos cargados correctamente', 'success');
-  } catch (err) {
-    console.warn('No se pudo conectar con la API, usando datos de ejemplo:', err);
-    cargarDatosEjemplo();
-    showToast('⚠️ Usando datos de ejemplo - Configurá la URL en config.js', 'error');
+    const [pr,pa,ge] = await Promise.all([API.getPrestamos(),API.getPagos(),API.getGestiones()]);
+    D.prestamos=pr.data||[];D.pagos=pa.data||[];D.gestiones=ge.data||[];
+    toast('Datos sincronizados','success');
+  } catch(e) {
+    if (e.message === 'URL_NO_CONFIGURADA') {
+      cargarEjemplo();
+      toast('Modo demo — Configurá la URL en config.js','error');
+    } else {
+      cargarEjemplo();
+      toast('Sin conexión — Datos de ejemplo','error');
+    }
   }
-
-  showLoading(false);
-  
-  // Renderizar tab actual
-  const activeTab = document.querySelector('.menu-item.active')?.dataset.tab || 'dashboard';
-  switchTab(activeTab);
+  document.getElementById('loading').style.display='none';
+  const at=document.querySelector('.menu-item.active');
+  switchTab(at?at.dataset.tab:'dashboard');
 }
 
-function cargarDatosEjemplo() {
-  DATOS.prestamos = [
-    { id:5, cliente:"Carmen Dalila Vasquez Ferrera", tipo:"PREST. MENSUAL", fecha:"2025-03-12", capital:15264, balance:13662.69, balanceCuotas:728.70, diaPago:"Día 17", cartera:"Zona 3" },
-    { id:9, cliente:"Gladys Carolina Castillo Ramirez", tipo:"PREST. QUINCENAL", fecha:"2025-03-12", capital:6000, balance:6000, balanceCuotas:600, diaPago:"Día 15", cartera:"Zona 3" },
-    { id:13, cliente:"Angelica Patricia Pineda Carbajal", tipo:"PREST. QUINCENAL", fecha:"2025-03-12", capital:12000, balance:12000, balanceCuotas:2840, diaPago:"Día 15", cartera:"Zona 3" },
-    { id:15, cliente:"Daisy Rivera Valladares", tipo:"PREST. SEMANAL", fecha:"2025-03-12", capital:13400, balance:8500, balanceCuotas:1200, diaPago:"Día lunes", cartera:"Zona 3" },
-    { id:19, cliente:"Keylin Roxana Mejia Garcia", tipo:"PREST. QUINCENAL", fecha:"2025-03-12", capital:12598, balance:12598, balanceCuotas:5292.43, diaPago:"Día 15", cartera:"Zona 3" },
-    { id:24, cliente:"Mauricio Zamora Perdomo", tipo:"PREST. SEMANAL", fecha:"2025-03-12", capital:7958, balance:4200, balanceCuotas:850, diaPago:"Día miércoles", cartera:"Zona 3" },
-    { id:25, cliente:"Mirian Maritza Flores Aguilar", tipo:"PREST. SEMANAL", fecha:"2025-03-12", capital:3500, balance:1800, balanceCuotas:400, diaPago:"Día miércoles", cartera:"Zona 3" },
-    { id:26, cliente:"Olvin Enrique Castro Ortega", tipo:"PREST. SEMANAL", fecha:"2025-03-12", capital:5822, balance:4443.16, balanceCuotas:476.10, diaPago:"Día lunes", cartera:"Zona 3" },
-    { id:28, cliente:"Suyapa Yadira Cardona Marquez", tipo:"PREST. QUINCENAL", fecha:"2025-03-12", capital:10000, balance:7500, balanceCuotas:1500, diaPago:"Día 15", cartera:"Zona 3" },
-    { id:29, cliente:"Mario Emmanuel Lopez Ortez", tipo:"PREST. SEMANAL", fecha:"2025-03-12", capital:4500, balance:3200, balanceCuotas:520, diaPago:"Día martes", cartera:"Zona 3" },
-    { id:30, cliente:"Delmy Cristina Gutierrez Caceres", tipo:"PREST. SEMANAL", fecha:"2025-03-12", capital:8000, balance:5600, balanceCuotas:1100, diaPago:"Día jueves", cartera:"Zona 3" },
+function cargarEjemplo() {
+  D.prestamos=[
+    {id:5,cliente:"Carmen Dalila Vasquez Ferrera",tipo:"PREST. MENSUAL",capital:15264,balance:13662.69,balanceCuotas:728.70,diaPago:"Día 17",cartera:"Zona 3"},
+    {id:9,cliente:"Gladys Carolina Castillo Ramirez",tipo:"PREST. QUINCENAL",capital:6000,balance:6000,balanceCuotas:600,diaPago:"Día 15",cartera:"Zona 3"},
+    {id:13,cliente:"Angelica Patricia Pineda Carbajal",tipo:"PREST. QUINCENAL",capital:12000,balance:12000,balanceCuotas:2840,diaPago:"Día 15",cartera:"Zona 3"},
+    {id:15,cliente:"Daisy Rivera Valladares",tipo:"PREST. SEMANAL",capital:13400,balance:8500,balanceCuotas:1200,diaPago:"Día lunes",cartera:"Zona 3"},
+    {id:19,cliente:"Keylin Roxana Mejia Garcia",tipo:"PREST. QUINCENAL",capital:12598,balance:12598,balanceCuotas:5292.43,diaPago:"Día 15",cartera:"Zona 3"},
+    {id:24,cliente:"Mauricio Zamora Perdomo",tipo:"PREST. SEMANAL",capital:7958,balance:4200,balanceCuotas:850,diaPago:"Día miércoles",cartera:"Zona 3"},
+    {id:25,cliente:"Mirian Maritza Flores Aguilar",tipo:"PREST. SEMANAL",capital:3500,balance:1800,balanceCuotas:400,diaPago:"Día miércoles",cartera:"Zona 3"},
+    {id:26,cliente:"Olvin Enrique Castro Ortega",tipo:"PREST. SEMANAL",capital:5822,balance:4443.16,balanceCuotas:476.10,diaPago:"Día lunes",cartera:"Zona 3"},
+    {id:28,cliente:"Suyapa Yadira Cardona Marquez",tipo:"PREST. QUINCENAL",capital:10000,balance:7500,balanceCuotas:1500,diaPago:"Día 15",cartera:"Zona 3"},
+    {id:29,cliente:"Mario Emmanuel Lopez Ortez",tipo:"PREST. SEMANAL",capital:4500,balance:3200,balanceCuotas:520,diaPago:"Día martes",cartera:"Zona 3"},
+    {id:30,cliente:"Delmy Cristina Gutierrez Caceres",tipo:"PREST. SEMANAL",capital:8000,balance:5600,balanceCuotas:1100,diaPago:"Día jueves",cartera:"Zona 3"},
   ];
-
-  DATOS.pagos = [
-    { id:1, cliente:"Carmen Dalila Vasquez Ferrera", tipo:"PREST. MENSUAL", valor:728.70, fecha:"2026-02-10", caja:"Bac", cartera:"Zona 3" },
-    { id:2, cliente:"Gladys Carolina Castillo Ramirez", tipo:"PREST. QUINCENAL", valor:600, fecha:"2026-02-11", caja:"Bac", cartera:"Zona 3" },
-    { id:3, cliente:"Angelica Patricia Pineda Carbajal", tipo:"PREST. QUINCENAL", valor:2840, fecha:"2026-02-12", caja:"Ficohsa", cartera:"Zona 3" },
-    { id:4, cliente:"Keylin Roxana Mejia Garcia", tipo:"PREST. QUINCENAL", valor:5292.43, fecha:"2026-02-12", caja:"Banpais", cartera:"Zona 3" },
-    { id:5, cliente:"Daisy Rivera Valladares", tipo:"PREST. SEMANAL", valor:1200, fecha:"2026-02-24", caja:"Bac", cartera:"Zona 3" },
-    { id:6, cliente:"Olvin Enrique Castro Ortega", tipo:"PREST. SEMANAL", valor:476.10, fecha:"2026-02-24", caja:"Ficohsa", cartera:"Zona 3" },
-    { id:7, cliente:"Mauricio Zamora Perdomo", tipo:"PREST. SEMANAL", valor:850, fecha:"2026-02-26", caja:"Bac", cartera:"Zona 3" },
+  D.pagos=[
+    {cliente:"Carmen Dalila Vasquez Ferrera",tipo:"PREST. MENSUAL",valor:728.70,fecha:"2026-02-10",caja:"Bac"},
+    {cliente:"Gladys Carolina Castillo Ramirez",tipo:"PREST. QUINCENAL",valor:600,fecha:"2026-02-11",caja:"Bac"},
+    {cliente:"Angelica Patricia Pineda Carbajal",tipo:"PREST. QUINCENAL",valor:2840,fecha:"2026-02-12",caja:"Ficohsa"},
+    {cliente:"Keylin Roxana Mejia Garcia",tipo:"PREST. QUINCENAL",valor:5292.43,fecha:"2026-02-12",caja:"Banpais"},
+    {cliente:"Daisy Rivera Valladares",tipo:"PREST. SEMANAL",valor:1200,fecha:"2026-02-24",caja:"Bac"},
+    {cliente:"Olvin Enrique Castro Ortega",tipo:"PREST. SEMANAL",valor:476.10,fecha:"2026-02-24",caja:"Ficohsa"},
+    {cliente:"Mauricio Zamora Perdomo",tipo:"PREST. SEMANAL",valor:850,fecha:hoyStr,caja:"Bac"},
+    {cliente:"Mirian Maritza Flores Aguilar",tipo:"PREST. SEMANAL",valor:400,fecha:hoyStr,caja:"Ficohsa"},
   ];
-
-  DATOS.gestiones = [
-    { cliente:"Carmen Dalila Vasquez Ferrera", estado:"promesa", comentario:"Dice que paga el viernes", fechaPromesa:"2026-02-28", montoPagado:0, montoPromesa:728.70, fecha:"2026-02-25", hora:"10:30:00", gestor:"Gestor 1" },
-    { cliente:"Gladys Carolina Castillo Ramirez", estado:"mensaje_enviado", comentario:"Recordatorio WhatsApp", fechaPromesa:"", montoPagado:0, montoPromesa:0, fecha:hoyStr, hora:"08:15:00", gestor:"Gestor 1" },
-    { cliente:"Angelica Patricia Pineda Carbajal", estado:"pagado", comentario:"Pagó cuota en Ficohsa", fechaPromesa:"", montoPagado:2840, montoPromesa:0, fecha:hoyStr, hora:"09:45:00", gestor:"Gestor 1" },
-    { cliente:"Keylin Roxana Mejia Garcia", estado:"no_contesta", comentario:"3 intentos de llamada", fechaPromesa:"", montoPagado:0, montoPromesa:0, fecha:hoyStr, hora:"10:00:00", gestor:"Gestor 1" },
+  D.gestiones=[
+    {cliente:"Carmen Dalila Vasquez Ferrera",estado:"promesa",comentario:"Paga el viernes",fechaPromesa:"2026-02-28",montoPagado:0,montoPromesa:728.70,fecha:"2026-02-25",hora:"10:30",gestor:"Gestor 1"},
+    {cliente:"Gladys Carolina Castillo Ramirez",estado:"mensaje_enviado",comentario:"WhatsApp enviado",fechaPromesa:"",montoPagado:0,montoPromesa:0,fecha:hoyStr,hora:"08:15",gestor:"Gestor 1"},
+    {cliente:"Angelica Patricia Pineda Carbajal",estado:"pagado",comentario:"Pagó en Ficohsa",fechaPromesa:"",montoPagado:2840,montoPromesa:0,fecha:hoyStr,hora:"09:45",gestor:"Gestor 1"},
+    {cliente:"Mauricio Zamora Perdomo",estado:"pagado",comentario:"Pagó cuota completa",fechaPromesa:"",montoPagado:850,montoPromesa:0,fecha:hoyStr,hora:"11:20",gestor:"Gestor 2"},
   ];
 }
 
-// ============================================
+// ══════════════════════════════════════
 // DASHBOARD
-// ============================================
-function renderDashboard() {
-  const activos = DATOS.prestamos.filter(p => (p.balance + p.balanceCuotas) >= CONFIG.MIN_BALANCE_ACTIVO);
-  const ciclo = getCiclo();
-  const totalCartera = activos.reduce((s, p) => s + p.balance, 0);
-  const totalCuotas = activos.reduce((s, p) => s + p.balanceCuotas, 0);
-  const totalRecup = DATOS.pagos.reduce((s, p) => s + p.valor, 0);
-  const clientesU = [...new Set(activos.map(p => p.cliente))];
-  const gHoy = DATOS.gestiones.filter(g => g.fecha === hoyStr);
-  const contactados = [...new Set(gHoy.map(g => g.cliente))];
-  const pagadosHoy = gHoy.filter(g => g.estado === 'pagado').length;
+// ══════════════════════════════════════
+function renderDash() {
+  const act = D.prestamos.filter(p=>(p.balance+p.balanceCuotas)>=CONFIG.MIN_BALANCE);
+  const c = getCiclo();
+  const totCar = act.reduce((s,p)=>s+p.balance,0);
+  const totCuo = act.reduce((s,p)=>s+p.balanceCuotas,0);
+  const totRec = D.pagos.reduce((s,p)=>s+p.valor,0);
+  const cliU = [...new Set(act.map(p=>p.cliente))];
+  const gH = D.gestiones.filter(g=>g.fecha===hoyStr);
+  const cont = [...new Set(gH.map(g=>g.cliente))];
+  const pagH = gH.filter(g=>g.estado==='pagado');
 
-  // NUEVO: Cobrado hoy (de pagos + montos en gestiones de hoy)
-  const pagosHoy = DATOS.pagos.filter(p => p.fecha === hoyStr);
-  const montoPagosHoy = pagosHoy.reduce((s, p) => s + p.valor, 0);
-  const montoGestionesHoy = gHoy
-    .filter(g => g.estado === 'pagado' && g.montoPagado)
-    .reduce((s, g) => s + (parseFloat(g.montoPagado) || 0), 0);
-  const cobradoHoy = montoPagosHoy + montoGestionesHoy;
+  // Cobrado hoy
+  const pagosHoy = D.pagos.filter(p=>p.fecha===hoyStr);
+  const mPagosHoy = pagosHoy.reduce((s,p)=>s+p.valor,0);
+  const mGestHoy = pagH.reduce((s,g)=>s+(parseFloat(g.montoPagado)||0),0);
+  const cobHoy = mPagosHoy + mGestHoy;
 
-  // NUEVO: % Cobro del ciclo
-  const pctCobro = totalCuotas > 0 ? (totalRecup / totalCuotas * 100) : 0;
+  // % cobro
+  const pct = totCuo>0?(totRec/totCuo*100):0;
 
-  // NUEVO: Proyección al cierre
-  const cicloTotal = getCiclo();
-  const diasCicloTotal = Math.ceil((cicloTotal.fin - cicloTotal.inicio) / 86400000);
-  const diasTranscurridos = diasCicloTotal - cicloTotal.dias;
-  const promedioDiario = diasTranscurridos > 0 ? totalRecup / diasTranscurridos : 0;
-  const proyeccion = totalRecup + (promedioDiario * cicloTotal.dias);
-  const pctProyeccion = totalCuotas > 0 ? (proyeccion / totalCuotas * 100) : 0;
+  // Proyección
+  const diasT = c.totalDias||1, diasP = diasT-c.dias;
+  const promD = diasP>0?totRec/diasP:0;
+  const proy = totRec+(promD*c.dias);
+  const pctProy = totCuo>0?(proy/totCuo*100):0;
 
-  // NUEVO: Falta por cobrar
-  const faltaCobrar = Math.max(0, totalCuotas - totalRecup);
-  const clientesPagadosCiclo = new Set(DATOS.pagos.map(p => p.cliente));
-  const clientesPendientes = clientesU.filter(c => !clientesPagadosCiclo.has(c)).length;
+  // Falta para meta
+  const falta = Math.max(0, totCuo - totRec);
+  const faltaDiario = c.dias > 0 ? falta / c.dias : falta;
 
-  // Info ciclo
-  document.getElementById('ciclo-info').textContent = 
-    'Ciclo: ' + ciclo.inicio.toLocaleDateString('es-HN') + ' - ' + ciclo.fin.toLocaleDateString('es-HN');
-  
-  const dcEl = document.getElementById('dias-cierre');
-  dcEl.textContent = ciclo.dias + ' días para cierre';
-  dcEl.className = 'badge-cierre ' + (ciclo.dias <= 3 ? 'danger' : ciclo.dias <= 7 ? 'warning' : 'normal');
+  // Render
+  document.getElementById('ciclo-info').textContent = 'Ciclo: '+c.ini.toLocaleDateString('es-HN')+' - '+c.fin.toLocaleDateString('es-HN');
+  const dc=document.getElementById('dias-cierre');
+  dc.textContent=c.dias+' días para cierre';
+  dc.className='badge-cierre '+(c.dias<=3?'danger':c.dias<=7?'warning':'ok');
 
-  // Stats FILA 1
-  document.getElementById('stat-cobrado-hoy').textContent = formatL(cobradoHoy);
-  document.getElementById('stat-cobros-hoy-count').textContent = (pagosHoy.length + pagadosHoy) + ' cobros hoy';
-  document.getElementById('stat-pct-cobro').textContent = pctCobro.toFixed(1) + '%';
-  document.getElementById('stat-pct-detalle').textContent = formatL(totalRecup) + ' de ' + formatL(totalCuotas);
-  document.getElementById('stat-recuperado').textContent = formatL(totalRecup);
-  document.getElementById('stat-pagos-count').textContent = DATOS.pagos.length + ' pagos del ciclo';
-  document.getElementById('stat-proyeccion').textContent = formatL(proyeccion);
-  document.getElementById('stat-proyeccion-pct').textContent = pctProyeccion.toFixed(1) + '% de la meta';
+  document.getElementById('s-cobrado-hoy').textContent=fL(cobHoy);
+  document.getElementById('s-cobros-count').textContent=(pagosHoy.length+pagH.length)+' cobros hoy';
+  document.getElementById('s-pct').textContent=pct.toFixed(1)+'%';
+  document.getElementById('s-pct-det').textContent=fL(totRec)+' de '+fL(totCuo);
+  document.getElementById('s-proyeccion').textContent=fL(proy);
+  document.getElementById('s-proy-pct').textContent=pctProy.toFixed(1)+'% de la meta';
+  document.getElementById('s-falta-meta').textContent=fL(falta);
+  document.getElementById('s-falta-det').textContent=c.dias>0?fL(faltaDiario)+'/día para llegar':'Ciclo cerrado';
 
-  // Stats FILA 2
-  document.getElementById('stat-cartera').textContent = formatL(totalCartera);
-  document.getElementById('stat-clientes').textContent = clientesU.length + ' clientes activos';
-  document.getElementById('stat-cuotas').textContent = formatL(totalCuotas);
-  document.getElementById('stat-gestiones').textContent = gHoy.length;
-  document.getElementById('stat-contactados').textContent = contactados.length + '/' + clientesU.length + ' contactados';
-  document.getElementById('stat-falta-cobrar').textContent = formatL(faltaCobrar);
-  document.getElementById('stat-falta-clientes').textContent = clientesPendientes + ' clientes pendientes';
+  document.getElementById('s-cartera').textContent=fL(totCar);
+  document.getElementById('s-clientes').textContent=cliU.length+' clientes';
+  document.getElementById('s-cuotas').textContent=fL(totCuo);
+  document.getElementById('s-recup').textContent=fL(totRec);
+  document.getElementById('s-recup-count').textContent=D.pagos.length+' pagos';
+  document.getElementById('s-gest').textContent=gH.length;
+  document.getElementById('s-contact').textContent=cont.length+'/'+cliU.length+' contactados';
 
-  // Progress bars
-  const pbContainer = document.getElementById('progress-bars');
-  pbContainer.innerHTML = '';
-  const bars = [
-    { label: 'Clientes Contactados Hoy', value: contactados.length, max: clientesU.length, color: '#3b82f6' },
-    { label: '% Cobro del Ciclo', value: totalRecup, max: totalCuotas, color: '#16a34a' },
-    { label: 'Proyección vs Meta', value: proyeccion, max: totalCuotas, color: '#8b5cf6' },
-    { label: 'Efectividad Hoy', value: pagadosHoy, max: gHoy.length || 1, color: '#f59e0b' },
-  ];
-  bars.forEach(b => {
-    const pct = b.max > 0 ? Math.min((b.value / b.max) * 100, 100) : 0;
-    pbContainer.innerHTML += 
-      '<div class="progress-item">' +
-        '<div class="progress-header">' +
-          '<span class="progress-label">' + b.label + '</span>' +
-          '<span class="progress-pct">' + pct.toFixed(1) + '%</span>' +
-        '</div>' +
-        '<div class="progress-track">' +
-          '<div class="progress-fill" style="width:' + pct + '%;background:' + b.color + '"></div>' +
-        '</div>' +
-      '</div>';
+  // Progress
+  const pb=document.getElementById('progress-bars');pb.innerHTML='';
+  [{l:'% Cobro del Ciclo',v:totRec,mx:totCuo,cl:'#22c55e'},{l:'Proyección vs Meta',v:proy,mx:totCuo,cl:'#a855f7'},{l:'Contactados Hoy',v:cont.length,mx:cliU.length,cl:'#3b82f6'},{l:'Efectividad Hoy',v:pagH.length,mx:gH.length||1,cl:'#f59e0b'}].forEach(b=>{
+    const p=b.mx>0?Math.min(b.v/b.mx*100,100):0;
+    pb.innerHTML+='<div class="prog"><div class="prog-head"><span class="prog-lbl">'+b.l+'</span><span class="prog-pct">'+p.toFixed(1)+'%</span></div><div class="prog-track"><div class="prog-fill" style="width:'+p+'%;background:'+b.cl+'"></div></div></div>';
   });
 
-  // Estados hoy
-  const estContainer = document.getElementById('estados-hoy');
-  estContainer.innerHTML = '';
-  CONFIG.ESTADOS.forEach(e => {
-    const count = gHoy.filter(g => g.estado === e.value).length;
-    const montoEst = gHoy.filter(g => g.estado === e.value && g.montoPagado).reduce((s, g) => s + (parseFloat(g.montoPagado) || 0), 0);
-    estContainer.innerHTML += 
-      '<div class="estado-row">' +
-        '<div class="estado-left"><span>' + e.icon + '</span><span>' + e.label + '</span></div>' +
-        '<div style="display:flex;align-items:center;gap:8px">' +
-          (montoEst > 0 ? '<span style="font-size:11px;color:#16a34a;font-weight:600">' + formatL(montoEst) + '</span>' : '') +
-          '<span class="estado-badge" style="background:' + e.bg + ';color:' + e.color + '">' + count + '</span>' +
-        '</div>' +
-      '</div>';
+  // Estados
+  const eh=document.getElementById('estados-hoy');eh.innerHTML='';
+  CONFIG.ESTADOS.forEach(e=>{
+    const n=gH.filter(g=>g.estado===e.value).length;
+    const m=gH.filter(g=>g.estado===e.value&&g.montoPagado).reduce((s,g)=>s+(parseFloat(g.montoPagado)||0),0);
+    eh.innerHTML+='<div class="erow"><div class="erow-l"><span>'+e.icon+'</span><span>'+e.label+'</span></div><div style="display:flex;align-items:center;gap:8px">'+(m>0?'<span style="font-size:11px;color:var(--green);font-weight:600">'+fL(m)+'</span>':'')+'<span class="ebadge" style="background:'+e.bg+';color:'+e.color+'">'+n+'</span></div></div>';
   });
 
   // Promesas vencidas
-  const promVenc = DATOS.gestiones.filter(g =>
-    g.estado === 'promesa' && g.fechaPromesa && g.fechaPromesa <= hoyStr &&
-    !DATOS.gestiones.some(g2 => g2.cliente === g.cliente && g2.estado === 'pagado' && g2.fecha >= g.fechaPromesa)
-  );
-
-  const pvContainer = document.getElementById('promesas-vencidas-container');
-  if (promVenc.length > 0) {
-    pvContainer.style.display = 'block';
-    document.getElementById('promesas-count').textContent = promVenc.length;
-    document.getElementById('promesas-lista').innerHTML = promVenc.slice(0, 8).map(g => 
-      '<div class="promesa-item">' +
-        '<span class="promesa-nombre">' + g.cliente + '</span>' +
-        '<span class="promesa-fecha">Prometió: ' + g.fechaPromesa + (g.montoPromesa ? ' - ' + formatL(g.montoPromesa) : '') + '</span>' +
-      '</div>').join('');
-  } else {
-    pvContainer.style.display = 'none';
-  }
+  const pv=D.gestiones.filter(g=>g.estado==='promesa'&&g.fechaPromesa&&g.fechaPromesa<=hoyStr&&!D.gestiones.some(g2=>g2.cliente===g.cliente&&g2.estado==='pagado'&&g2.fecha>=g.fechaPromesa));
+  const pvBox=document.getElementById('promesas-box');
+  if(pv.length>0){pvBox.style.display='block';document.getElementById('prom-count').textContent=pv.length;document.getElementById('prom-list').innerHTML=pv.slice(0,8).map(g=>'<div class="pi"><span class="pi-n">'+g.cliente+'</span><span class="pi-f">'+g.fechaPromesa+(g.montoPromesa?' — '+fL(g.montoPromesa):'')+'</span></div>').join('')}
+  else pvBox.style.display='none';
 }
 
-// ============================================
+// ══════════════════════════════════════
 // CARTERA
-// ============================================
-function renderCartera() {
-  // Populate día del mes filter
-  const dmSelect = document.getElementById('filtro-dia-mes');
-  if (dmSelect.options.length <= 1) {
-    for (let i = 1; i <= 31; i++) {
-      dmSelect.innerHTML += `<option value="${i}">Día ${i}</option>`;
-    }
-  }
-  filtrarCartera();
-}
-
+// ══════════════════════════════════════
 function filtrarCartera() {
-  const fTexto = document.getElementById('filtro-texto').value.toLowerCase();
-  const fDS = document.getElementById('filtro-dia-semana').value;
-  const fDM = document.getElementById('filtro-dia-mes').value;
-  const fEst = document.getElementById('filtro-estado').value;
-  const fOrd = document.getElementById('filtro-orden').value;
+  const ft=document.getElementById('f-texto')?.value.toLowerCase()||'';
+  const fds=document.getElementById('f-ds')?.value||'';
+  const fdm=document.getElementById('f-dm')?.value||'';
+  const fe=document.getElementById('f-est')?.value||'';
+  const fo=document.getElementById('f-ord')?.value||'balance_desc';
 
-  const activos = DATOS.prestamos.filter(p => (p.balance + p.balanceCuotas) >= CONFIG.MIN_BALANCE_ACTIVO);
-  let clientes = agruparPorCliente(activos);
+  let cls=agrupar(D.prestamos.filter(p=>(p.balance+p.balanceCuotas)>=CONFIG.MIN_BALANCE));
+  if(ft) cls=cls.filter(c=>c.cliente.toLowerCase().includes(ft));
+  if(fds) cls=cls.filter(c=>c.diaPago.toLowerCase().includes(fds));
+  if(fdm) cls=cls.filter(c=>{const m=c.diaPago.match(/Día (\d+)/);return m&&parseInt(m[1])===parseInt(fdm)});
+  if(fe) cls=cls.filter(c=>{const u=ultGest(c.cliente);if(fe==='pendiente') return !u;return u&&u.estado===fe});
 
-  // Filtros
-  if (fTexto) clientes = clientes.filter(c => c.cliente.toLowerCase().includes(fTexto));
-  if (fDS) {
-    // Limpiar el otro filtro
-    document.getElementById('filtro-dia-mes').value = '';
-    clientes = clientes.filter(c => c.diaPago.toLowerCase().includes(fDS));
-  }
-  if (fDM) {
-    document.getElementById('filtro-dia-semana').value = '';
-    clientes = clientes.filter(c => {
-      const m = c.diaPago.match(/Día (\d+)/);
-      return m && parseInt(m[1]) === parseInt(fDM);
-    });
-  }
-  if (fEst) {
-    clientes = clientes.filter(c => {
-      const ug = getUltimaGestion(c.cliente);
-      if (fEst === 'pendiente') return !ug;
-      return ug && ug.estado === fEst;
-    });
-  }
+  switch(fo){case 'balance_desc':cls.sort((a,b)=>b.totalBal-a.totalBal);break;case 'balance_asc':cls.sort((a,b)=>a.totalBal-b.totalBal);break;case 'cuotas_desc':cls.sort((a,b)=>b.totalCuo-a.totalCuo);break;case 'nombre':cls.sort((a,b)=>a.cliente.localeCompare(b.cliente));break}
 
-  // Ordenar
-  switch(fOrd) {
-    case 'balance_desc': clientes.sort((a, b) => b.totalBal - a.totalBal); break;
-    case 'balance_asc': clientes.sort((a, b) => a.totalBal - b.totalBal); break;
-    case 'cuotas_desc': clientes.sort((a, b) => b.totalCuo - a.totalCuo); break;
-    case 'nombre': clientes.sort((a, b) => a.cliente.localeCompare(b.cliente)); break;
-  }
-
-  document.getElementById('cartera-count').textContent = `${clientes.length} clientes activos (Balance + Cuotas ≥ L5)`;
-
-  const container = document.getElementById('cartera-lista');
-  container.innerHTML = clientes.map(c => {
-    const ug = getUltimaGestion(c.cliente);
-    const est = ug ? getEstadoInfo(ug.estado) : getEstadoInfo('pendiente');
-    const tel = c.telefono ? c.telefono.replace(/-/g, '') : '';
-
-    return `
-      <div class="list-item ${getBorderClass(ug?.estado || 'pendiente')}">
-        <div class="item-info">
-          <div class="item-name">${c.cliente}</div>
-          <div class="item-detail">${c.diaPago} · ${c.cartera} · ${c.prestamos.length} prést.</div>
-        </div>
-        <div class="item-amount">
-          <div class="item-balance">${formatL(c.totalBal)}</div>
-          <div class="item-cuota">Cuota: ${formatL(c.totalCuo)}</div>
-        </div>
-        <span class="item-badge" style="background:${est.bg};color:${est.color}">${est.icon} ${est.label}</span>
-        <div class="item-actions">
-          <button class="btn-gestionar" onclick='abrirModal(${JSON.stringify(c).replace(/'/g, "\\'")})'>Gestionar</button>
-          ${tel ? `<a class="btn-whatsapp" href="https://wa.me/504${tel}" target="_blank">💬</a>` : ''}
-        </div>
-      </div>`;
+  document.getElementById('c-count').textContent=cls.length+' clientes activos';
+  document.getElementById('c-list').innerHTML=cls.map(c=>{
+    const u=ultGest(c.cliente),e=u?getEst(u.estado):getEst('pendiente'),tel=c.telefono?c.telefono.replace(/-/g,''):'';
+    return '<div class="li '+blClass(u?.estado||'pendiente')+'"><div class="li-info"><div class="li-name">'+c.cliente+'</div><div class="li-det">'+c.diaPago+' · '+c.cartera+' · '+c.prestamos.length+' prést.</div></div><div class="li-amt"><div class="li-bal">'+fL(c.totalBal)+'</div><div class="li-cuo">Cuota: '+fL(c.totalCuo)+'</div></div><span class="li-badge" style="background:'+e.bg+';color:'+e.color+'">'+e.icon+' '+e.label+'</span><div class="li-acts"><button class="btn-gest" onclick=\'abrirModal('+JSON.stringify(c).replace(/'/g,"\\'")+')\'">Gestionar</button>'+(tel?'<a class="btn-wa" href="https://wa.me/504'+tel+'" target="_blank">💬</a>':'')+'</div></div>';
   }).join('');
 }
 
-// ============================================
+// ══════════════════════════════════════
 // GESTIÓN HOY
-// ============================================
-function renderGestionHoy() {
-  const ds = getDiaSemanaHoy();
-  const dm = getDiaMesHoy();
+// ══════════════════════════════════════
+function renderHoy() {
+  const ds=diaSem(),dm=diaMes();
+  document.getElementById('hoy-info').textContent=hoy.toLocaleDateString('es-HN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const act=D.prestamos.filter(p=>(p.balance+p.balanceCuotas)>=CONFIG.MIN_BALANCE);
+  const ch={};
+  act.forEach(p=>{const dp=p.diaPago.toLowerCase();if(dp.includes(ds)||dp==='día '+dm){if(!ch[p.cliente])ch[p.cliente]={cliente:p.cliente,telefono:p.telefono||'',cartera:p.cartera,diaPago:p.diaPago,prestamos:[],totalBal:0,totalCuo:0};ch[p.cliente].prestamos.push(p);ch[p.cliente].totalBal+=p.balance;ch[p.cliente].totalCuo+=p.balanceCuotas}});
+  const lista=Object.values(ch);
+  const gDH=D.gestiones.filter(g=>g.fecha===hoyStr);
+  const yaG=new Set(gDH.map(g=>g.cliente));
+  const pend=lista.filter(c=>!yaG.has(c.cliente)),comp=lista.filter(c=>yaG.has(c.cliente));
 
-  document.getElementById('hoy-info').textContent =
-    `${hoy.toLocaleDateString('es-HN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`;
-
-  const activos = DATOS.prestamos.filter(p => (p.balance + p.balanceCuotas) >= CONFIG.MIN_BALANCE_ACTIVO);
-  
-  // Clientes que les toca hoy
-  const cHoy = {};
-  activos.forEach(p => {
-    const dp = p.diaPago.toLowerCase();
-    const esHoy = dp.includes(ds) || dp === `día ${dm}`;
-    if (esHoy) {
-      if (!cHoy[p.cliente]) {
-        cHoy[p.cliente] = { cliente: p.cliente, telefono: p.telefono || '', cartera: p.cartera, diaPago: p.diaPago, prestamos: [], totalBal: 0, totalCuo: 0 };
-      }
-      cHoy[p.cliente].prestamos.push(p);
-      cHoy[p.cliente].totalBal += p.balance;
-      cHoy[p.cliente].totalCuo += p.balanceCuotas;
-    }
-  });
-
-  const lista = Object.values(cHoy);
-  const gDeHoy = DATOS.gestiones.filter(g => g.fecha === hoyStr);
-  const yaG = new Set(gDeHoy.map(g => g.cliente));
-  const pend = lista.filter(c => !yaG.has(c.cliente));
-  const comp = lista.filter(c => yaG.has(c.cliente));
-
-  // Vacío
-  document.getElementById('hoy-vacio').style.display = lista.length === 0 ? 'block' : 'none';
-
-  // Pendientes
-  const pendContainer = document.getElementById('hoy-pendientes');
-  if (pend.length > 0) {
-    pendContainer.innerHTML = `<h3 class="section-header pending">⏳ Pendientes de Gestionar (${pend.length})</h3>` +
-      pend.map(c => `
-        <div class="list-item hoy-item-pending" style="margin-bottom:6px">
-          <div class="item-info">
-            <div class="item-name">${c.cliente}</div>
-            <div class="item-detail">${c.diaPago} · Cuota: ${formatL(c.totalCuo)}</div>
-          </div>
-          <div class="item-balance">${formatL(c.totalBal)}</div>
-          <button class="btn-gestionar" onclick='abrirModal(${JSON.stringify(c).replace(/'/g, "\\'")})'>Gestionar</button>
-        </div>`).join('');
-  } else {
-    pendContainer.innerHTML = '';
-  }
-
-  // Completados
-  const compContainer = document.getElementById('hoy-completados');
-  if (comp.length > 0) {
-    compContainer.innerHTML = `<h3 class="section-header done">✅ Gestionados (${comp.length})</h3>` +
-      comp.map(c => {
-        const ug = gDeHoy.filter(g => g.cliente === c.cliente).sort((a, b) => (b.hora || '').localeCompare(a.hora || ''))[0];
-        const est = ug ? getEstadoInfo(ug.estado) : getEstadoInfo('pendiente');
-        return `
-          <div class="list-item hoy-item-done ${getBorderClass(ug?.estado)}" style="margin-bottom:6px">
-            <div class="item-info">
-              <div class="item-name">${c.cliente}</div>
-              <div class="item-detail">${ug?.comentario || 'Sin comentario'}</div>
-            </div>
-            <span class="item-badge" style="background:${est.bg};color:${est.color}">${est.icon} ${est.label}</span>
-          </div>`;
-      }).join('');
-  } else {
-    compContainer.innerHTML = '';
-  }
+  document.getElementById('hoy-empty').style.display=lista.length===0?'block':'none';
+  document.getElementById('hoy-pend').innerHTML=pend.length?'<h3 class="sh sh-r">⏳ Pendientes ('+pend.length+')</h3>'+pend.map(c=>'<div class="li li-pend" style="margin-bottom:6px"><div class="li-info"><div class="li-name">'+c.cliente+'</div><div class="li-det">'+c.diaPago+' · Cuota: '+fL(c.totalCuo)+'</div></div><div class="li-bal">'+fL(c.totalBal)+'</div><button class="btn-gest" onclick=\'abrirModal('+JSON.stringify(c).replace(/'/g,"\\'")+')\'">Gestionar</button></div>').join(''):'';
+  document.getElementById('hoy-done').innerHTML=comp.length?'<h3 class="sh sh-g">✅ Gestionados ('+comp.length+')</h3>'+comp.map(c=>{const u=gDH.filter(g=>g.cliente===c.cliente).sort((a,b)=>(b.hora||'').localeCompare(a.hora||''))[0];const e=u?getEst(u.estado):getEst('pendiente');const mTxt=u&&u.montoPagado>0?' — '+fL(u.montoPagado):'';return '<div class="li li-done '+blClass(u?.estado)+'" style="margin-bottom:6px"><div class="li-info"><div class="li-name">'+c.cliente+'</div><div class="li-det">'+(u?.comentario||'')+mTxt+'</div></div><span class="li-badge" style="background:'+e.bg+';color:'+e.color+'">'+e.icon+' '+e.label+'</span></div>'}).join(''):'';
 }
 
-// ============================================
+// ══════════════════════════════════════
 // HISTORIAL
-// ============================================
-function renderHistorial() {
-  document.getElementById('filtro-hist-fecha').value = hoyStr;
-  filtrarHistorial();
+// ══════════════════════════════════════
+function renderHist(){document.getElementById('fh-date').value=hoyStr;filtrarHistorial()}
+function filtrarHistorial() {
+  const ff=document.getElementById('fh-date').value,fe=document.getElementById('fh-est').value;
+  let g=[...D.gestiones].sort((a,b)=>(b.fecha+b.hora).localeCompare(a.fecha+a.hora));
+  // Filtro por rol: gestores solo ven sus gestiones
+  if(USER && USER.rol==='gestor' && !CONFIG.ROLES[USER.rol].canSeeAllGestiones) g=g.filter(x=>x.gestor===USER.nombre);
+  if(ff) g=g.filter(x=>x.fecha===ff);
+  if(fe) g=g.filter(x=>x.estado===fe);
+  document.getElementById('h-count').textContent=g.length+' gestiones';
+  if(!g.length){document.getElementById('h-list').innerHTML='<div class="empty"><span class="empty-icon">📭</span><span>Sin resultados</span></div>';return}
+  document.getElementById('h-list').innerHTML=g.map(x=>{const e=getEst(x.estado);const mTxt=x.montoPagado>0?' — '+fL(x.montoPagado):'';return '<div class="li '+blClass(x.estado)+'"><div class="li-info"><div class="li-name">'+x.cliente+'</div>'+(x.comentario?'<div class="li-det">'+x.comentario+mTxt+'</div>':'')+(x.fechaPromesa?'<div class="li-det" style="color:var(--yellow)">Promesa: '+x.fechaPromesa+(x.montoPromesa?' — '+fL(x.montoPromesa):'')+'</div>':'')+'<div class="li-det" style="color:var(--text3)">Gestor: '+(x.gestor||'—')+'</div></div><span class="li-badge" style="background:'+e.bg+';color:'+e.color+'">'+e.icon+' '+e.label+'</span><span class="li-date">'+x.fecha+' '+( x.hora||'')+'</span></div>'}).join('');
+}
+function limpiarFiltrosHist(){document.getElementById('fh-date').value='';document.getElementById('fh-est').value='';filtrarHistorial()}
+
+// ══════════════════════════════════════
+// PAGOS
+// ══════════════════════════════════════
+function filtrarPagos() {
+  const ft=document.getElementById('fp-txt')?.value.toLowerCase()||'';
+  let p=[...D.pagos].sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  if(ft) p=p.filter(x=>x.cliente.toLowerCase().includes(ft));
+  document.getElementById('p-total').textContent='Total: '+fL(p.reduce((s,x)=>s+x.valor,0));
+  document.getElementById('p-list').innerHTML=p.map(x=>'<div class="li bl-green"><div class="li-info"><div class="li-name">'+x.cliente+'</div><div class="li-det">'+x.tipo+' · '+(x.caja||'')+'</div></div><div class="li-val">'+fL(x.valor)+'</div><span class="li-date">'+x.fecha+'</span></div>').join('');
 }
 
-function filtrarHistorial() {
-  const fFecha = document.getElementById('filtro-hist-fecha').value;
-  const fEst = document.getElementById('filtro-hist-estado').value;
-
-  let fil = [...DATOS.gestiones].sort((a, b) => `${b.fecha}${b.hora}`.localeCompare(`${a.fecha}${a.hora}`));
-  if (fFecha) fil = fil.filter(g => g.fecha === fFecha);
-  if (fEst) fil = fil.filter(g => g.estado === fEst);
-
-  document.getElementById('historial-count').textContent = `${fil.length} gestiones encontradas`;
-
-  const container = document.getElementById('historial-lista');
-  if (fil.length === 0) {
-    container.innerHTML = '<div class="empty-state"><span class="empty-icon">📭</span><span>Sin gestiones para estos filtros</span></div>';
-    return;
-  }
-
-  container.innerHTML = fil.map(g => {
-    const est = getEstadoInfo(g.estado);
-    return `
-      <div class="list-item ${getBorderClass(g.estado)}">
-        <div class="item-info">
-          <div class="item-name">${g.cliente}</div>
-          ${g.comentario ? `<div class="item-detail">${g.comentario}</div>` : ''}
-          ${g.fechaPromesa ? `<div class="item-detail" style="color:#d97706">Promesa: ${g.fechaPromesa}</div>` : ''}
-        </div>
-        <span class="item-badge" style="background:${est.bg};color:${est.color}">${est.icon} ${est.label}</span>
-        <span class="item-fecha">${g.fecha} ${g.hora || ''}</span>
-      </div>`;
+// ══════════════════════════════════════
+// USUARIOS (solo gerente)
+// ══════════════════════════════════════
+function renderUsers() {
+  if(!USER || USER.rol !== 'gerente'){document.getElementById('users-list').innerHTML='<div class="empty"><span class="empty-icon">🔒</span><span>Sin permisos</span></div>';return}
+  document.getElementById('users-list').innerHTML=CONFIG.USUARIOS.map(u=>{
+    const r=CONFIG.ROLES[u.rol];
+    return '<div class="li bl-blue"><div class="li-info"><div class="li-name">'+u.nombre+'</div><div class="li-det">ID: '+u.id+' · Rol: '+r.label+'</div></div><span class="li-badge" style="background:var(--blue-g);color:var(--blue)">'+r.label+'</span></div>';
   }).join('');
 }
 
-function limpiarFiltrosHistorial() {
-  document.getElementById('filtro-hist-fecha').value = '';
-  document.getElementById('filtro-hist-estado').value = '';
-  filtrarHistorial();
-}
-
-// ============================================
-// PAGOS
-// ============================================
-function renderPagos() {
-  filtrarPagos();
-}
-
-function filtrarPagos() {
-  const fTexto = document.getElementById('filtro-pagos-texto').value.toLowerCase();
-  
-  let fil = [...DATOS.pagos].sort((a, b) => b.fecha.localeCompare(a.fecha));
-  if (fTexto) fil = fil.filter(p => p.cliente.toLowerCase().includes(fTexto));
-  
-  const total = fil.reduce((s, p) => s + p.valor, 0);
-  document.getElementById('pagos-total').textContent = `Total: ${formatL(total)}`;
-
-  const container = document.getElementById('pagos-lista');
-  container.innerHTML = fil.map(p => `
-    <div class="list-item border-green">
-      <div class="item-info">
-        <div class="item-name">${p.cliente}</div>
-        <div class="item-detail">${p.tipo} · ${p.caja || ''}</div>
-      </div>
-      <div class="item-valor">${formatL(p.valor)}</div>
-      <span class="item-fecha">${p.fecha}</span>
-    </div>`).join('');
-}
-
-// ============================================
+// ══════════════════════════════════════
 // MODAL GESTIONAR
-// ============================================
-function abrirModal(cliente) {
-  clienteActual = cliente;
-  estadoSeleccionado = '';
-
-  document.getElementById('modal-gestionar').style.display = 'flex';
-  document.getElementById('modal-cliente-nombre').textContent = cliente.cliente;
-  document.getElementById('modal-cliente-info').textContent = 
-    `${cliente.diaPago} · Balance: ${formatL(cliente.totalBal)} · Cuota: ${formatL(cliente.totalCuo)}`;
+// ══════════════════════════════════════
+function abrirModal(c) {
+  clienteAct=c;estadoSel='';
+  document.getElementById('modal').style.display='flex';
+  document.getElementById('m-nombre').textContent=c.cliente;
+  document.getElementById('m-info').textContent=c.diaPago+' · Balance: '+fL(c.totalBal)+' · Cuota: '+fL(c.totalCuo);
 
   // Préstamos
-  const pSection = document.getElementById('modal-prestamos-section');
-  const pLista = document.getElementById('modal-prestamos-lista');
-  if (cliente.prestamos && cliente.prestamos.length > 0) {
-    pSection.style.display = 'block';
-    pLista.innerHTML = cliente.prestamos.map(p => `
-      <div class="prestamo-row">
-        <span class="prestamo-tipo">${p.tipo}</span>
-        <div>
-          <span class="prestamo-monto">${formatL(p.balance)}</span>
-          <span class="prestamo-cuota">Cuota: ${formatL(p.balanceCuotas)}</span>
-        </div>
-      </div>`).join('');
-  } else {
-    pSection.style.display = 'none';
-  }
+  const ps=document.getElementById('m-prest-sec'),pl=document.getElementById('m-prest');
+  if(c.prestamos&&c.prestamos.length){ps.style.display='block';pl.innerHTML=c.prestamos.map(p=>'<div class="prow"><span class="p-tipo">'+p.tipo+'</span><div><span class="p-monto">'+fL(p.balance)+'</span><span class="p-cuo">Cuota: '+fL(p.balanceCuotas)+'</span></div></div>').join('')}else ps.style.display='none';
 
   // Estados
-  const estContainer = document.getElementById('modal-estados');
-  estContainer.innerHTML = CONFIG.ESTADOS.filter(e => e.value !== 'pendiente').map(e => `
-    <button class="estado-btn" data-estado="${e.value}" 
-      onclick="seleccionarEstado('${e.value}')"
-      style="border-color:${e.color}">${e.icon} ${e.label}</button>`).join('');
+  document.getElementById('m-estados').innerHTML=CONFIG.ESTADOS.filter(e=>e.value!=='pendiente').map(e=>'<button class="estado-btn" data-e="'+e.value+'" onclick="selEstado(\''+e.value+'\')" style="border-color:'+e.color+'">'+e.icon+' '+e.label+'</button>').join('');
 
-  // Reset form
-  document.getElementById('modal-comentario').value = '';
-  document.getElementById('modal-fecha-promesa').value = '';
-  document.getElementById('modal-fecha-promesa').min = hoyStr;
-  document.getElementById('modal-monto-pagado').value = '';
-  document.getElementById('modal-monto-promesa').value = '';
-  document.getElementById('monto-pagado-container').style.display = 'none';
-  document.getElementById('promesa-fecha-container').style.display = 'none';
-  document.getElementById('promesa-monto-container').style.display = 'none';
-  document.getElementById('btn-guardar-gestion').disabled = true;
+  // Reset
+  document.getElementById('m-comment').value='';
+  document.getElementById('m-monto').value='';
+  document.getElementById('m-prom-date').value='';
+  document.getElementById('m-prom-date').min=hoyStr;
+  document.getElementById('m-prom-monto').value='';
+  document.getElementById('m-monto-box').style.display='none';
+  document.getElementById('m-prom-date-box').style.display='none';
+  document.getElementById('m-prom-monto-box').style.display='none';
+  document.getElementById('m-save').disabled=true;
 
   // Historial
-  const hist = DATOS.gestiones
-    .filter(g => g.cliente === cliente.cliente)
-    .sort((a, b) => `${b.fecha}${b.hora}`.localeCompare(`${a.fecha}${a.hora}`));
-
-  const hSection = document.getElementById('modal-historial-section');
-  const hLista = document.getElementById('modal-historial-lista');
-  if (hist.length > 0) {
-    hSection.style.display = 'block';
-    hLista.innerHTML = hist.slice(0, 10).map(g => {
-      const e = getEstadoInfo(g.estado);
-      const montoTxt = g.montoPagado ? ' — ' + formatL(g.montoPagado) : (g.montoPromesa ? ' — Prometió: ' + formatL(g.montoPromesa) : '');
-      return `
-        <div class="hist-item">
-          <div>
-            <span class="item-badge" style="background:${e.bg};color:${e.color};font-size:10px;padding:1px 7px">${e.icon} ${e.label}${montoTxt}</span>
-            ${g.comentario ? `<div class="hist-comment">${g.comentario}</div>` : ''}
-            ${g.fechaPromesa ? `<div class="hist-promesa">Promesa: ${g.fechaPromesa}</div>` : ''}
-          </div>
-          <div class="hist-date">${g.fecha}<br>${g.hora || ''}</div>
-        </div>`;
-    }).join('');
-  } else {
-    hSection.style.display = 'none';
-  }
+  const h=D.gestiones.filter(g=>g.cliente===c.cliente).sort((a,b)=>(b.fecha+b.hora).localeCompare(a.fecha+a.hora));
+  const hs=document.getElementById('m-hist-sec'),hl=document.getElementById('m-hist');
+  if(h.length){hs.style.display='block';hl.innerHTML=h.slice(0,10).map(g=>{const e=getEst(g.estado);const mt=g.montoPagado>0?' — '+fL(g.montoPagado):(g.montoPromesa>0?' — Prom: '+fL(g.montoPromesa):'');return '<div class="hist-i"><div><span class="li-badge" style="background:'+e.bg+';color:'+e.color+';font-size:10px;padding:1px 7px">'+e.icon+' '+e.label+mt+'</span>'+(g.comentario?'<div class="hist-c">'+g.comentario+'</div>':'')+(g.fechaPromesa?'<div class="hist-p">Promesa: '+g.fechaPromesa+'</div>':'')+'<div class="hist-c" style="font-style:italic">'+( g.gestor||'')+'</div></div><div class="hist-d">'+g.fecha+'<br>'+(g.hora||'')+'</div></div>'}).join('')}else hs.style.display='none';
 }
 
-function seleccionarEstado(estado) {
-  estadoSeleccionado = estado;
-  
-  document.querySelectorAll('.estado-btn').forEach(btn => {
-    const isSelected = btn.dataset.estado === estado;
-    const est = getEstadoInfo(estado);
-    btn.classList.toggle('selected', isSelected);
-    if (isSelected) {
-      btn.style.background = est.bg;
-      btn.style.color = est.color;
-      btn.style.borderColor = est.color;
-    } else {
-      btn.style.background = '#fff';
-      btn.style.color = '#475569';
-      btn.style.borderColor = '#d1d5db';
-    }
+function selEstado(v) {
+  estadoSel=v;
+  document.querySelectorAll('.estado-btn').forEach(b=>{
+    const sel=b.dataset.e===v,e=getEst(v);
+    b.classList.toggle('sel',sel);
+    if(sel){b.style.background=e.bg;b.style.color=e.color;b.style.borderColor=e.color}
+    else{b.style.background='var(--bg3)';b.style.color='var(--text2)';b.style.borderColor='var(--border)'}
   });
-
-  // Mostrar/ocultar campos según estado
-  document.getElementById('monto-pagado-container').style.display = estado === 'pagado' ? 'block' : 'none';
-  document.getElementById('promesa-fecha-container').style.display = estado === 'promesa' ? 'block' : 'none';
-  document.getElementById('promesa-monto-container').style.display = estado === 'promesa' ? 'block' : 'none';
-  
-  // Pre-llenar monto con la cuota del cliente
-  if (estado === 'pagado' && clienteActual) {
-    document.getElementById('modal-monto-pagado').value = clienteActual.totalCuo.toFixed(2);
-  }
-  if (estado === 'promesa' && clienteActual) {
-    document.getElementById('modal-monto-promesa').value = clienteActual.totalCuo.toFixed(2);
-  }
-
-  document.getElementById('btn-guardar-gestion').disabled = false;
+  document.getElementById('m-monto-box').style.display=v==='pagado'?'block':'none';
+  document.getElementById('m-prom-date-box').style.display=v==='promesa'?'block':'none';
+  document.getElementById('m-prom-monto-box').style.display=v==='promesa'?'block':'none';
+  if(v==='pagado'&&clienteAct) document.getElementById('m-monto').value=clienteAct.totalCuo.toFixed(2);
+  if(v==='promesa'&&clienteAct) document.getElementById('m-prom-monto').value=clienteAct.totalCuo.toFixed(2);
+  document.getElementById('m-save').disabled=false;
 }
 
-async function guardarGestionModal() {
-  if (!estadoSeleccionado || !clienteActual) return;
+async function guardarGestion() {
+  if(!estadoSel||!clienteAct) return;
+  const mp=estadoSel==='pagado'?parseFloat(document.getElementById('m-monto').value)||0:0;
+  const mpr=estadoSel==='promesa'?parseFloat(document.getElementById('m-prom-monto').value)||0:0;
 
-  const montoPagado = estadoSeleccionado === 'pagado' 
-    ? parseFloat(document.getElementById('modal-monto-pagado').value) || 0 
-    : 0;
-  const montoPromesa = estadoSeleccionado === 'promesa'
-    ? parseFloat(document.getElementById('modal-monto-promesa').value) || 0
-    : 0;
-
-  const gestion = {
-    cliente: clienteActual.cliente,
-    estado: estadoSeleccionado,
-    comentario: document.getElementById('modal-comentario').value,
-    fechaPromesa: estadoSeleccionado === 'promesa' ? document.getElementById('modal-fecha-promesa').value : '',
-    montoPagado: montoPagado,
-    montoPromesa: montoPromesa,
-    fecha: hoyStr,
-    hora: new Date().toLocaleTimeString('es-HN'),
-    gestor: CONFIG.GESTOR_NOMBRE,
+  const g={
+    cliente:clienteAct.cliente,estado:estadoSel,
+    comentario:document.getElementById('m-comment').value,
+    fechaPromesa:estadoSel==='promesa'?document.getElementById('m-prom-date').value:'',
+    montoPagado:mp,montoPromesa:mpr,
+    fecha:hoyStr,hora:new Date().toLocaleTimeString('es-HN'),
+    gestor:USER?USER.nombre:'Gestor 1',
   };
-
-  // Guardar localmente
-  DATOS.gestiones.push(gestion);
-
-  // Intentar guardar en API
-  try {
-    await API.guardarGestion(gestion);
-    const montoMsg = montoPagado > 0 ? ' — ' + formatL(montoPagado) : '';
-    showToast('✅ Gestión guardada' + montoMsg, 'success');
-  } catch (err) {
-    showToast('💾 Guardado localmente (sin conexión a Sheets)', '');
-  }
-
+  D.gestiones.push(g);
+  try{await API.guardarGestion(g);toast('Gestión guardada'+(mp>0?' — '+fL(mp):''),'success')}catch(e){toast('Guardado local','');}
   cerrarModal();
-
-  // Re-renderizar tab actual
-  const activeTab = document.querySelector('.menu-item.active')?.dataset.tab || 'dashboard';
-  switchTab(activeTab);
+  const at=document.querySelector('.menu-item.active');switchTab(at?at.dataset.tab:'dashboard');
 }
 
-function cerrarModal(event) {
-  if (event && event.target !== event.currentTarget) return;
-  document.getElementById('modal-gestionar').style.display = 'none';
-  clienteActual = null;
-  estadoSeleccionado = '';
-}
+function cerrarModal(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('modal').style.display='none';clienteAct=null;estadoSel=''}
 
-// ============================================
-// INICIALIZACIÓN
-// ============================================
-document.addEventListener('DOMContentLoaded', () => {
-  cargarTodosDatos();
-});
-
-// Cerrar modal con Escape
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') cerrarModal();
-});
+// ══════════════════════════════════════
+// INIT
+// ══════════════════════════════════════
+document.addEventListener('DOMContentLoaded',()=>initLogin());
+document.addEventListener('keydown',e=>{if(e.key==='Escape')cerrarModal()});
+document.getElementById('login-pass').addEventListener('keydown',e=>{if(e.key==='Enter')iniciarSesion()});

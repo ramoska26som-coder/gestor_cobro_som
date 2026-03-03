@@ -1,71 +1,51 @@
 // ============================================
-// API - Conexión con Google Apps Script
+// API v3 - Conexión con Google Apps Script
+// Corregido: CORS, redirect, error handling
 // ============================================
-
 const API = {
-  // GET request
   async get(action, params = {}) {
+    // Si la URL no está configurada, lanzar error inmediatamente
+    if (!CONFIG.API_URL || CONFIG.API_URL.includes('TU_ID_AQUI')) {
+      throw new Error('URL_NO_CONFIGURADA');
+    }
     try {
       const url = new URL(CONFIG.API_URL);
       url.searchParams.append('action', action);
       Object.entries(params).forEach(([k, v]) => {
-        if (v !== undefined && v !== null && v !== '') {
-          url.searchParams.append(k, v);
-        }
+        if (v != null && v !== '') url.searchParams.append(k, v);
       });
-
-      const response = await fetch(url.toString());
-      if (!response.ok) throw new Error('Error de red: ' + response.status);
-      
-      const data = await response.json();
-      if (data.error) throw new Error(data.error);
-      
-      return data;
+      const r = await fetch(url.toString(), { method: 'GET', redirect: 'follow' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const txt = await r.text();
+      try { return JSON.parse(txt); } catch(e) { throw new Error('Respuesta inválida'); }
     } catch (err) {
-      console.error(`API GET ${action}:`, err);
+      console.error('API GET ' + action + ':', err);
       throw err;
     }
   },
 
-  // POST request
   async post(action, body = {}) {
+    if (!CONFIG.API_URL || CONFIG.API_URL.includes('TU_ID_AQUI')) {
+      throw new Error('URL_NO_CONFIGURADA');
+    }
     try {
-      const response = await fetch(CONFIG.API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
+      const r = await fetch(CONFIG.API_URL, {
+        method: 'POST', redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action, ...body }),
       });
-
-      if (!response.ok) throw new Error('Error de red: ' + response.status);
-      
-      const data = await response.json();
-      if (data.error) throw new Error(data.error);
-      
-      return data;
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const txt = await r.text();
+      try { return JSON.parse(txt); } catch(e) { throw new Error('Respuesta inválida'); }
     } catch (err) {
-      console.error(`API POST ${action}:`, err);
+      console.error('API POST ' + action + ':', err);
       throw err;
     }
   },
 
-  // Métodos específicos
-  async getPrestamos() {
-    return this.get('getPrestamos');
-  },
-
-  async getPagos(fechaInicio, fechaFin) {
-    return this.get('getPagos', { fechaInicio, fechaFin });
-  },
-
-  async getGestiones(fechaInicio, fechaFin) {
-    return this.get('getGestiones', { fechaInicio, fechaFin });
-  },
-
-  async getDashboard() {
-    return this.get('getDashboard');
-  },
-
-  async guardarGestion(gestion) {
-    return this.post('guardarGestion', { gestion });
-  },
+  getPrestamos() { return this.get('getPrestamos'); },
+  getPagos(fi, ff) { return this.get('getPagos', { fechaInicio: fi, fechaFin: ff }); },
+  getGestiones(fi, ff) { return this.get('getGestiones', { fechaInicio: fi, fechaFin: ff }); },
+  getDashboard() { return this.get('getDashboard'); },
+  guardarGestion(g) { return this.post('guardarGestion', { gestion: g }); },
 };

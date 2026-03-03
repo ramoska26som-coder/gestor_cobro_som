@@ -1,36 +1,62 @@
 // ============================================
-// CONFIGURACIÓN DE LA APP
+// CONFIGURACIÓN - COBROS PRO v3
 // ============================================
-// INSTRUCCIONES:
-// 1. Publicá tu Apps Script como Web App
-// 2. Copiá la URL y pegala aquí abajo
-// 3. Subí a GitHub Pages
-// ============================================
-
 const CONFIG = {
-  // URL de tu Google Apps Script Web App
-  API_URL: 'https://script.google.com/macros/s/AKfycbyjLrMeHNPCBEcRRVx2m5HXhbbKnKjh7Rr8OZOxetK8d4ouodF1zoP58UtpvqBKkIvC/exec',
-  
-  // Nombre del gestor (podés cambiarlo por gestor)
-  GESTOR_NOMBRE: 'Gestor 1',
-  
-  // Zona horaria
-  TIMEZONE: 'America/Tegucigalpa',
-  
-  // Día de cierre de mes
+  // ⚡ CAMBIAR ESTA URL por tu Apps Script Web App
+  API_URL: 'https://script.google.com/macros/s/TU_ID_AQUI/exec',
+
   DIA_CIERRE: 8,
-  
-  // Mínimo para considerar préstamo activo
-  MIN_BALANCE_ACTIVO: 5,
-  
-  // Estados de gestión disponibles
+  MIN_BALANCE: 5,
+
+  // Usuarios del sistema (también se pueden manejar desde Sheets)
+  USUARIOS: [
+    { id: 'admin', nombre: 'Administrador', pass: '1234', rol: 'gerente', avatar: 'A' },
+    { id: 'gestor1', nombre: 'Gestor 1', pass: '1234', rol: 'gestor', avatar: 'G1' },
+    { id: 'gestor2', nombre: 'Gestor 2', pass: '1234', rol: 'gestor', avatar: 'G2' },
+    { id: 'super1', nombre: 'Supervisor', pass: '1234', rol: 'supervisor', avatar: 'S' },
+  ],
+
+  // Permisos por rol
+  ROLES: {
+    gerente: {
+      label: 'Gerente',
+      tabs: ['dashboard', 'cartera', 'hoy', 'historial', 'pagos', 'usuarios'],
+      canEditUsers: true,
+      canSeeAllGestiones: true,
+      canDelete: true,
+    },
+    supervisor: {
+      label: 'Supervisor',
+      tabs: ['dashboard', 'cartera', 'hoy', 'historial', 'pagos'],
+      canEditUsers: false,
+      canSeeAllGestiones: true,
+      canDelete: false,
+    },
+    gestor: {
+      label: 'Gestor',
+      tabs: ['dashboard', 'cartera', 'hoy', 'historial', 'pagos'],
+      canEditUsers: false,
+      canSeeAllGestiones: false,
+      canDelete: false,
+    },
+  },
+
   ESTADOS: [
-    { value: 'pagado', label: 'Pagado', color: '#16a34a', bg: '#dcfce7', icon: '✅' },
-    { value: 'promesa', label: 'Promesa de Pago', color: '#d97706', bg: '#fef3c7', icon: '🤝' },
-    { value: 'no_contesta', label: 'No Contesta', color: '#6b7280', bg: '#f3f4f6', icon: '📵' },
-    { value: 'mensaje_enviado', label: 'Mensaje Enviado', color: '#2563eb', bg: '#dbeafe', icon: '💬' },
-    { value: 'rechaza_pago', label: 'Rechaza Pago', color: '#dc2626', bg: '#fee2e2', icon: '❌' },
-    { value: 'ilocalizable', label: 'Ilocalizable', color: '#7c3aed', bg: '#ede9fe', icon: '❓' },
-    { value: 'pendiente', label: 'Pendiente', color: '#94a3b8', bg: '#f1f5f9', icon: '⏳' },
+    { value: 'pagado', label: 'Pagado', color: '#22c55e', bg: 'rgba(34,197,94,.15)', icon: '✅' },
+    { value: 'promesa', label: 'Promesa de Pago', color: '#f59e0b', bg: 'rgba(245,158,11,.12)', icon: '🤝' },
+    { value: 'no_contesta', label: 'No Contesta', color: '#6b7280', bg: 'rgba(107,114,128,.12)', icon: '📵' },
+    { value: 'mensaje_enviado', label: 'Mensaje Enviado', color: '#3b82f6', bg: 'rgba(59,130,246,.12)', icon: '💬' },
+    { value: 'rechaza_pago', label: 'Rechaza Pago', color: '#ef4444', bg: 'rgba(239,68,68,.12)', icon: '❌' },
+    { value: 'ilocalizable', label: 'Ilocalizable', color: '#a855f7', bg: 'rgba(168,85,247,.12)', icon: '❓' },
+    { value: 'pendiente', label: 'Pendiente', color: '#64748b', bg: 'rgba(100,116,139,.1)', icon: '⏳' },
+  ],
+
+  TABS: [
+    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'cartera', label: 'Cartera', icon: '📋' },
+    { id: 'hoy', label: 'Gestión Hoy', icon: '📞' },
+    { id: 'historial', label: 'Historial', icon: '📜' },
+    { id: 'pagos', label: 'Pagos', icon: '💰' },
+    { id: 'usuarios', label: 'Usuarios', icon: '👥' },
   ],
 };
