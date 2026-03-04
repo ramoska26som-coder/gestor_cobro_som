@@ -3,7 +3,7 @@
 // ============================================================
 const CONFIG = {
   // ⚡ Cambia esta URL por tu Apps Script Web App
-  API_URL: 'https://script.google.com/macros/s/AKfycbyjLrMeHNPCBEcRRVx2m5HXhbbKnKjh7Rr8OZOxetK8d4ouodF1zoP58UtpvqBKkIvC/exec',
+  API_URL: 'https://script.google.com/macros/s/TU_ID_AQUI/exec',
 
   DIA_CIERRE: 8,
   MIN_BALANCE: 5,

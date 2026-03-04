@@ -311,9 +311,21 @@
           <option value="cheque">📄 Cheque</option>
         </select>
       </div>
+      <div id="m-capital-box" class="fg" style="display:none">
+        <label class="fl">Capital cobrado (L) <span style="color:var(--text3);font-weight:400">– opcional</span></label>
+        <input type="number" id="m-capital" class="fi fi-full" placeholder="0.00" step="0.01" min="0">
+      </div>
+      <div id="m-intereses-box" class="fg" style="display:none">
+        <label class="fl">Intereses cobrados (L) <span style="color:var(--text3);font-weight:400">– opcional</span></label>
+        <input type="number" id="m-intereses" class="fi fi-full" placeholder="0.00" step="0.01" min="0">
+      </div>
       <div id="m-prom-date-box" class="fg" style="display:none">
         <label class="fl">Fecha de Promesa</label>
         <input type="date" id="m-prom-date" class="fi fi-full">
+      </div>
+      <div id="m-prom-hora-box" class="fg" style="display:none">
+        <label class="fl">Hora de Promesa</label>
+        <input type="time" id="m-prom-hora" class="fi fi-full">
       </div>
       <div id="m-prom-monto-box" class="fg" style="display:none">
         <label class="fl">Monto Prometido (L)</label>

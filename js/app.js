@@ -152,17 +152,31 @@ function celebrar(monto) {
 
 // ── RESUMEN INICIAL ───────────────────────────────────────────
 function mostrarResumenInicial() {
-  if (!dashData) return;
-  const d = dashData;
-  const meta = d.meta || 0;
-  const rec  = d.recuperacion.totalRecuperado;
-  const pct  = meta > 0 ? (rec/meta*100).toFixed(1) : d.recuperacion.porcentaje;
-  const gH   = d.gestionHoy;
+  if (!D.prestamos.length && !D.pagos.length) return;
+  const esGestor2 = USER && USER.rol === 'gestor' && USER.cartera;
+  let actP = D.prestamos.filter(p=>(p.balance+p.balanceCuotas)>=CONFIG.MIN_BALANCE);
+  if (esGestor2) actP = actP.filter(p=>p.cartera===USER.cartera);
+  let pagosR = D.pagos;
+  if (esGestor2) pagosR = pagosR.filter(p=>p.cartera===USER.cartera);
+  let gHR = D.gestiones.filter(g=>g.fecha===hoyStr);
+  if (esGestor2) gHR = gHR.filter(g=>g.gestor===USER.nombre);
+
+  const c    = getCiclo();
+  const meta = CONFIG.META_CICLO || actP.reduce((s,p)=>s+p.balanceCuotas,0);
+  const rec  = pagosR.reduce((s,p)=>s+p.valor,0);
+  const pct  = meta > 0 ? (rec/meta*100).toFixed(1) : '0.0';
+  const cont = [...new Set(gHR.map(g=>g.cliente))];
+  const pvCount = D.gestiones.filter(g =>
+    g.estado==='promesa' && g.fechaPromesa && g.fechaPromesa<=hoyStr &&
+    (esGestor2 ? g.gestor===USER.nombre : true) &&
+    !D.gestiones.some(g2=>g2.cliente===g.cliente&&g2.estado==='pagado'&&g2.fecha>=g.fechaPromesa)
+  ).length;
+
   document.getElementById('ri-meta').textContent    = fL(meta);
   document.getElementById('ri-rec').textContent     = fL(rec) + ' (' + pct + '%)';
-  document.getElementById('ri-dias').textContent    = d.ciclo.diasRestantes + ' días';
-  document.getElementById('ri-gest').textContent    = gH.total + ' gestiones · ' + gH.contactados + ' contactados';
-  document.getElementById('ri-prom').textContent    = d.promesasVencidas + ' promesas vencidas';
+  document.getElementById('ri-dias').textContent    = c.dias + ' dias';
+  document.getElementById('ri-gest').textContent    = gHR.length + ' gestiones - ' + cont.length + ' contactados';
+  document.getElementById('ri-prom').textContent    = pvCount + ' promesas vencidas';
   document.getElementById('resumen-inicial').style.display = 'flex';
 }
 
@@ -346,17 +360,24 @@ function cargarEjemplo() {
 // DASHBOARD
 // ══════════════════════════════════════
 function renderDash() {
-  const act    = D.prestamos.filter(p=>(p.balance+p.balanceCuotas)>=CONFIG.MIN_BALANCE);
+  // Filtrar por cartera si es gestor
+  const esGestor = USER && USER.rol === 'gestor' && USER.cartera;
+  let act = D.prestamos.filter(p=>(p.balance+p.balanceCuotas)>=CONFIG.MIN_BALANCE);
+  if (esGestor) act = act.filter(p => p.cartera === USER.cartera);
+  let pagosAct = D.pagos;
+  if (esGestor) pagosAct = pagosAct.filter(p => p.cartera === USER.cartera);
+
   const c      = getCiclo();
   const totCar = act.reduce((s,p)=>s+p.balance,0);
   const totCuo = act.reduce((s,p)=>s+p.balanceCuotas,0);
-  const totRec = D.pagos.reduce((s,p)=>s+p.valor,0);
+  const totRec = pagosAct.reduce((s,p)=>s+p.valor,0);
   const meta   = CONFIG.META_CICLO || totCuo;
   const cliU   = [...new Set(act.map(p=>p.cliente))];
-  const gH     = D.gestiones.filter(g=>g.fecha===hoyStr);
+  let gH = D.gestiones.filter(g=>g.fecha===hoyStr);
+  if (esGestor) gH = gH.filter(g=>g.gestor===USER.nombre);
   const cont   = [...new Set(gH.map(g=>g.cliente))];
   const pagH   = gH.filter(g=>g.estado==='pagado');
-  const pagosHoy = D.pagos.filter(p=>p.fecha===hoyStr);
+  const pagosHoy = pagosAct.filter(p=>p.fecha===hoyStr);
   const cobHoy = pagosHoy.reduce((s,p)=>s+p.valor,0) + pagH.reduce((s,g)=>s+(g.montoPagado||0),0);
   const pct    = meta > 0 ? (totRec/meta*100) : 0;
   const diasT  = c.totalDias||1, diasP = Math.max(1, diasT-c.dias);
@@ -384,7 +405,7 @@ function renderDash() {
   document.getElementById('s-clientes').textContent    = cliU.length+' clientes';
   document.getElementById('s-cuotas').textContent      = fL(totCuo);
   document.getElementById('s-recup').textContent       = fL(totRec);
-  document.getElementById('s-recup-count').textContent = D.pagos.length+' pagos';
+  document.getElementById('s-recup-count').textContent = pagosAct.length+' pagos';
   document.getElementById('s-gest').textContent        = gH.length;
   document.getElementById('s-contact').textContent     = cont.length+'/'+cliU.length+' contactados';
 
@@ -409,17 +430,18 @@ function renderDash() {
   });
 
   // Gráfico cobro diario (SVG)
-  renderGraficoCobro();
+  renderGraficoCobro(pagosAct);
 
-  // Desglose capital vs intereses
-  const totCap = D.pagos.reduce((s,p)=>s+(p.capital||0),0);
-  const totInt = D.pagos.reduce((s,p)=>s+(p.intereses||0),0);
-  document.getElementById('desglose-capital').textContent   = fL(totCap);
-  document.getElementById('desglose-intereses').textContent = fL(totInt);
+  // Desglose capital vs intereses (ingresado manualmente al cobrar)
+  const gestPagF = D.gestiones.filter(g=>g.estado==="pagado" && (esGestor?g.gestor===USER.nombre:true));
+  const totCap = gestPagF.reduce((s,g)=>s+(g.capital||0),0);
+  const totInt = gestPagF.reduce((s,g)=>s+(g.intereses||0),0);
+  document.getElementById('desglose-capital').textContent   = totCap>0?fL(totCap):'Ingresar al cobrar';
+  document.getElementById('desglose-intereses').textContent = totInt>0?fL(totInt):'Ingresar al cobrar';
 
   // Métodos de pago
   const mpMap={};
-  D.pagos.forEach(p=>{const mp=p.medioPago||'efectivo';mpMap[mp]=(mpMap[mp]||0)+p.valor;});
+  pagosAct.forEach(p=>{const mp=p.medioPago||"efectivo";mpMap[mp]=(mpMap[mp]||0)+p.valor;});
   const mpEl=document.getElementById('metodos-pago'); mpEl.innerHTML='';
   const mpTotal=Object.values(mpMap).reduce((s,v)=>s+v,0)||1;
   const mpColors={'efectivo':'#22c55e','transferencia':'#3b82f6','cheque':'#f59e0b'};
@@ -429,7 +451,7 @@ function renderDash() {
   });
 
   // Mora por antigüedad
-  renderMoraAntigüedad();
+  renderMoraAntigüedad(act);
 
   // Promesas vencidas
   const pv=D.gestiones.filter(g=>g.estado==='promesa'&&g.fechaPromesa&&g.fechaPromesa<=hoyStr&&
@@ -447,13 +469,14 @@ function renderDash() {
   renderMiniRanking(gH);
 }
 
-function renderGraficoCobro() {
-  // Últimos 14 días desde D.pagos
+function renderGraficoCobro(pagosFiltrados) {
+  // Últimos 14 días - usa pagos filtrados por cartera si se pasa
+  const pagosRef = pagosFiltrados || D.pagos;
   const dias=[];
   for(let i=13;i>=0;i--){
     const dt=new Date(hoy); dt.setDate(dt.getDate()-i);
     const ds=dt.toISOString().split('T')[0];
-    const monto=D.pagos.filter(p=>p.fecha===ds).reduce((s,p)=>s+p.valor,0);
+    const monto=pagosRef.filter(p=>p.fecha===ds).reduce((s,p)=>s+p.valor,0);
     dias.push({ds:ds.slice(5),monto});
   }
   const maxMonto=Math.max(...dias.map(d=>d.monto),1);
@@ -472,23 +495,26 @@ function renderGraficoCobro() {
   document.getElementById('grafico-cobro').innerHTML=`<svg viewBox="0 0 ${W} ${H+4}" style="width:100%;height:90px">${bars}</svg>`;
 }
 
-function renderMoraAntigüedad() {
+function renderMoraAntigüedad(actPrestamos) {
+  const lista = actPrestamos || D.prestamos.filter(p=>(p.balance+p.balanceCuotas)>=CONFIG.MIN_BALANCE);
   const buckets=[
-    {label:'Al día (< 30 días)',    color:'#22c55e',count:0},
-    {label:'1 mes (30-60 días)',    color:'#f59e0b',count:0},
-    {label:'2 meses (60-90 días)',  color:'#f97316',count:0},
-    {label:'3 meses (90-180 días)', color:'#ef4444',count:0},
-    {label:'Más de 180 días',       color:'#a855f7',count:0},
+    {label:'Sin mora (ultimo pago < 30 dias)',     color:'#22c55e',count:0},
+    {label:'1 mes de mora (30-60 dias)',            color:'#f59e0b',count:0},
+    {label:'2 meses de mora (60-90 dias)',          color:'#f97316',count:0},
+    {label:'3-6 meses de mora (90-180 dias)',       color:'#ef4444',count:0},
+    {label:'Mora critica (mas de 180 dias o sin pago)',color:'#a855f7',count:0},
   ];
-  D.prestamos.forEach(p=>{
-    const dias=p.fecha?Math.floor((hoy-new Date(p.fecha))/864e5):0;
-    if(dias<30)       buckets[0].count++;
-    else if(dias<60)  buckets[1].count++;
-    else if(dias<90)  buckets[2].count++;
-    else if(dias<180) buckets[3].count++;
-    else              buckets[4].count++;
+  const clientesUnicos = [...new Set(lista.map(p=>p.cliente))];
+  clientesUnicos.forEach(cliente=>{
+    const dias = diasDesdeUltimoPago(cliente);
+    const d = dias !== null ? dias : 9999;
+    if(d<30)       buckets[0].count++;
+    else if(d<60)  buckets[1].count++;
+    else if(d<90)  buckets[2].count++;
+    else if(d<180) buckets[3].count++;
+    else           buckets[4].count++;
   });
-  const total=D.prestamos.length||1;
+  const total=clientesUnicos.length||1;
   const el=document.getElementById('mora-antiguedad'); el.innerHTML='';
   buckets.forEach(b=>{
     const pct=(b.count/total*100).toFixed(1);
@@ -592,13 +618,31 @@ function filtrarCartera() {
 function renderHoy() {
   const ds=diaSem(), dm=diaMes();
   document.getElementById('hoy-info').textContent=hoy.toLocaleDateString('es-HN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  // Solo clientes con balance > MIN_BALANCE
   const act=D.prestamos.filter(p=>(p.balance+p.balanceCuotas)>=CONFIG.MIN_BALANCE);
   const ch={};
+
+  // Clientes con promesa para hoy no cumplida
+  const promesasHoy = new Set(
+    D.gestiones
+      .filter(g=>g.estado==='promesa' && g.fechaPromesa===hoyStr &&
+        !D.gestiones.some(g2=>g2.cliente===g.cliente&&g2.estado==='pagado'&&g2.fecha>=g.fechaPromesa))
+      .map(g=>g.cliente)
+  );
+
   act.forEach(p=>{
     const dp=p.diaPago.toLowerCase();
-    if(dp.includes(ds)||dp==='día '+dm){
-      if(!ch[p.cliente])ch[p.cliente]={cliente:p.cliente,cartera:p.cartera,diaPago:p.diaPago,prestamos:[],totalBal:0,totalCuo:0};
-      ch[p.cliente].prestamos.push(p);ch[p.cliente].totalBal+=p.balance;ch[p.cliente].totalCuo+=p.balanceCuotas;
+    const pagaNormalHoy = dp.includes(ds) || dp==='ía '+dm || dp==='día '+dm;
+    const tienePromesaHoy = promesasHoy.has(p.cliente);
+    if(pagaNormalHoy || tienePromesaHoy){
+      if(!ch[p.cliente])ch[p.cliente]={
+        cliente:p.cliente, cartera:p.cartera, diaPago:p.diaPago,
+        prestamos:[], totalBal:0, totalCuo:0,
+        esPromesa: !pagaNormalHoy && tienePromesaHoy
+      };
+      ch[p.cliente].prestamos.push(p);
+      ch[p.cliente].totalBal+=p.balance;
+      ch[p.cliente].totalCuo+=p.balanceCuotas;
     }
   });
   if(USER&&USER.cartera&&USER.rol==='gestor') Object.keys(ch).forEach(k=>{if(ch[k].cartera!==USER.cartera)delete ch[k];});
@@ -665,7 +709,7 @@ function filtrarHistorial() {
       <div class="li-info">
         <div class="li-name">${x.cliente}</div>
         ${x.comentario?`<div class="li-det">${x.comentario}${mTxt}</div>`:''}
-        ${x.fechaPromesa?`<div class="li-det" style="color:var(--yellow)">Promesa: ${x.fechaPromesa}${x.montoPromesa?' — '+fL(x.montoPromesa):''}</div>`:''}
+        ${x.fechaPromesa?`<div class="li-det" style="color:var(--yellow)">Promesa: ${x.fechaPromesa}${x.horaPromesa?' a las '+x.horaPromesa:''}${x.montoPromesa?' — '+fL(x.montoPromesa):''}</div>`:''}
         <div class="li-det" style="color:var(--text3)">👤 ${x.gestor||'—'}</div>
       </div>
       <span class="li-badge" style="background:${e.bg};color:${e.color}">${e.icon} ${e.label}</span>
@@ -865,10 +909,10 @@ function abrirModal(c, idx=0) {
   ).join('');
 
   // Reset campos
-  ['m-comment','m-monto','m-prom-date','m-prom-monto'].forEach(id=>document.getElementById(id).value='');
+  ['m-comment','m-monto','m-prom-date','m-prom-monto','m-capital','m-intereses','m-prom-hora'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('m-prom-date').min=hoyStr;
   document.getElementById('m-medio-pago').value='efectivo';
-  ['m-monto-box','m-prom-date-box','m-prom-monto-box','m-medio-box'].forEach(id=>document.getElementById(id).style.display='none');
+  ['m-monto-box','m-prom-date-box','m-prom-monto-box','m-medio-box','m-capital-box','m-intereses-box','m-prom-hora-box'].forEach(id=>document.getElementById(id).style.display='none');
   document.getElementById('m-save').disabled=true;
 
   // Historial del cliente (historial de contactabilidad)
@@ -951,26 +995,42 @@ function selEstado(v) {
     b.style.color=sel?e.color:'var(--text2)';
     b.style.borderColor=sel?e.color:'var(--border)';
   });
-  document.getElementById('m-monto-box').style.display    = v==='pagado'?'block':'none';
-  document.getElementById('m-medio-box').style.display    = v==='pagado'?'block':'none';
-  document.getElementById('m-prom-date-box').style.display= v==='promesa'?'block':'none';
-  document.getElementById('m-prom-monto-box').style.display=v==='promesa'?'block':'none';
-  if(v==='pagado'&&clienteAct)  document.getElementById('m-monto').value=clienteAct.totalCuo.toFixed(2);
-  if(v==='promesa'&&clienteAct) document.getElementById('m-prom-monto').value=clienteAct.totalCuo.toFixed(2);
+  const esPag2=v==='pagado', esProm2=v==='promesa';
+  ['m-monto-box','m-medio-box','m-capital-box','m-intereses-box'].forEach(id=>document.getElementById(id).style.display=esPag2?'block':'none');
+  ['m-prom-date-box','m-prom-hora-box','m-prom-monto-box'].forEach(id=>document.getElementById(id).style.display=esProm2?'block':'none');
+  if(esPag2&&clienteAct){
+    document.getElementById('m-monto').value=clienteAct.totalCuo.toFixed(2);
+    document.getElementById('m-capital').value='';
+    document.getElementById('m-intereses').value='';
+  }
+  if(esProm2&&clienteAct){
+    document.getElementById('m-prom-monto').value=clienteAct.totalCuo.toFixed(2);
+    const ahora=new Date(); ahora.setHours(ahora.getHours()+1);
+    document.getElementById('m-prom-hora').value=ahora.toTimeString().slice(0,5);
+  }
   document.getElementById('m-save').disabled=false;
 }
 
 async function guardarGestion() {
   if(!estadoSel||!clienteAct) return;
-  const mp = estadoSel==='pagado' ? parseFloat(document.getElementById('m-monto').value)||0 : 0;
-  const mpr= estadoSel==='promesa'? parseFloat(document.getElementById('m-prom-monto').value)||0 : 0;
-  const medio=document.getElementById('m-medio-pago').value||'efectivo';
-
+  const esPagG  = estadoSel==='pagado';
+  const esPromG = estadoSel==='promesa';
+  const mp   = esPagG  ? parseFloat(document.getElementById('m-monto').value)||0      : 0;
+  const mpr  = esPromG ? parseFloat(document.getElementById('m-prom-monto').value)||0  : 0;
+  const cap  = esPagG  ? parseFloat(document.getElementById('m-capital').value)||0     : 0;
+  const inte = esPagG  ? parseFloat(document.getElementById('m-intereses').value)||0   : 0;
+  const medio       = document.getElementById('m-medio-pago').value||'efectivo';
+  const horaPromesa = esPromG ? document.getElementById('m-prom-hora').value||'' : '';
+  // Validacion: capital + intereses no deben superar el monto
+  if(esPagG && mp>0 && (cap+inte)>0 && (cap+inte)>(mp+0.01)){
+    toast('Capital + Intereses no puede superar el Monto Pagado','error'); return;
+  }
   const g={
     cliente:clienteAct.cliente, estado:estadoSel,
     comentario:document.getElementById('m-comment').value,
-    fechaPromesa:estadoSel==='promesa'?document.getElementById('m-prom-date').value:'',
-    montoPagado:mp, montoPromesa:mpr, medioPago:medio,
+    fechaPromesa:esPromG?document.getElementById('m-prom-date').value:'',
+    horaPromesa, montoPagado:mp, montoPromesa:mpr, medioPago:medio,
+    capital:cap, intereses:inte,
     fecha:hoyStr, hora:new Date().toLocaleTimeString('es-HN'),
     gestor:USER?USER.nombre:'Gestor 1',
   };

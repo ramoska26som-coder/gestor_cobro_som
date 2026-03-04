@@ -161,9 +161,15 @@ function getGestiones(fi, fn) {
     const fe = ff(f[0]);
     if (fi && fe < fi) continue;
     if (fn && fe > fn) continue;
-    r.push({ fecha:fe, hora:String(f[1]), cliente:String(f[2]).trim(), estado:f[3],
-              comentario:f[4]||'', fechaPromesa:ff(f[5]),
-              montoPagado:parseFloat(f[6])||0, montoPromesa:parseFloat(f[7])||0, gestor:f[8]||'' });
+    r.push({
+      fecha:fe, hora:String(f[1]), cliente:String(f[2]).trim(), estado:f[3],
+      comentario:f[4]||'', fechaPromesa:ff(f[5]),
+      montoPagado:parseFloat(f[6])||0, montoPromesa:parseFloat(f[7])||0,
+      gestor:f[8]||'',
+      horaPromesa:String(f[9]||''),       // col 10
+      capital:parseFloat(f[10])||0,        // col 11
+      intereses:parseFloat(f[11])||0       // col 12
+    });
   }
   return {success:true, data:r, total:r.length};
 }
@@ -177,14 +183,20 @@ function guardarGestion(g) {
     g.fecha || Utilities.formatDate(a,'America/Tegucigalpa','yyyy-MM-dd'),
     g.hora  || Utilities.formatDate(a,'America/Tegucigalpa','HH:mm:ss'),
     g.cliente, g.estado, g.comentario||'', g.fechaPromesa||'',
-    parseFloat(g.montoPagado)||0, parseFloat(g.montoPromesa)||0, g.gestor||''
+    parseFloat(g.montoPagado)||0, parseFloat(g.montoPromesa)||0,
+    g.gestor||'',
+    g.horaPromesa||'',            // col 10
+    parseFloat(g.capital)||0,     // col 11
+    parseFloat(g.intereses)||0    // col 12
   ]);
   const uf = h.getLastRow();
   const cl = {pagado:'#1a3a2a',promesa:'#3a2a0a',no_contesta:'#1a1a2a',
                mensaje_enviado:'#0a1a3a',rechaza_pago:'#3a0a0a',ilocalizable:'#2a0a3a'};
-  if (cl[g.estado]) h.getRange(uf,1,1,9).setBackground(cl[g.estado]).setFontColor('#e2e8f0');
+  if (cl[g.estado]) h.getRange(uf,1,1,12).setBackground(cl[g.estado]).setFontColor('#e2e8f0');
   if (parseFloat(g.montoPagado)  > 0) h.getRange(uf,7).setNumberFormat('#,##0.00');
   if (parseFloat(g.montoPromesa) > 0) h.getRange(uf,8).setNumberFormat('#,##0.00');
+  if (parseFloat(g.capital)      > 0) h.getRange(uf,11).setNumberFormat('#,##0.00');
+  if (parseFloat(g.intereses)    > 0) h.getRange(uf,12).setNumberFormat('#,##0.00');
   return {success:true, message:'OK'};
 }
 
@@ -293,9 +305,9 @@ function ff(f) {
 }
 
 function crearHoja(ss) {
-  const h = ss.insertSheet(HOJA_GESTIONES);
-  h.appendRow(['Fecha','Hora','Cliente','Estado','Comentario','Fecha Promesa','Monto Pagado','Monto Promesa','Gestor']);
-  h.getRange(1,1,1,9).setFontWeight('bold').setBackground('#0f172a').setFontColor('#fff');
+  h.appendRow(['Fecha','Hora','Cliente','Estado','Comentario','Fecha Promesa','Monto Pagado','Monto Promesa','Gestor','Hora Promesa','Capital','Intereses']);
+  h.getRange(1,1,1,12).setFontWeight('bold').setBackground('#0f172a').setFontColor('#fff');
+  [120,100,250,150,300,120,130,130,120,100,120,120].forEach((w,i) => h.setColumnWidth(i+1, w));
   [120,100,250,150,300,120,130,130,120].forEach((w,i) => h.setColumnWidth(i+1, w));
   h.setFrozenRows(1);
   return h;
