@@ -11,144 +11,336 @@
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-  <!-- ═══ LOGIN SCREEN ═══ -->
-  <div id="login-screen" class="login-screen">
-    <div class="login-card">
-      <div class="login-logo">💼</div>
-      <h1 class="login-title">Cobros Pro</h1>
-      <p class="login-sub">Sistema de Gestión de Cobros</p>
-      <div class="login-form">
-        <select id="login-usuario" class="login-input">
-          <option value="">Seleccionar usuario...</option>
-        </select>
-        <input type="password" id="login-pass" class="login-input" placeholder="Contraseña">
-        <button class="login-btn" onclick="iniciarSesion()">Ingresar</button>
-        <p id="login-error" class="login-error"></p>
-      </div>
+
+<!-- ═══ RESUMEN INICIAL ═══ -->
+<div id="resumen-inicial" class="ri-overlay" style="display:none" onclick="this.style.display='none'">
+  <div class="ri-card" onclick="event.stopPropagation()">
+    <div class="ri-header">
+      <span class="ri-icon">☀️</span>
+      <h2 class="ri-title">Resumen del Día</h2>
+      <button class="btn-x" onclick="document.getElementById('resumen-inicial').style.display='none'">✕</button>
+    </div>
+    <div class="ri-rows">
+      <div class="ri-row"><span>🎯 Meta del ciclo</span><strong id="ri-meta">—</strong></div>
+      <div class="ri-row"><span>💰 Recuperado</span><strong id="ri-rec">—</strong></div>
+      <div class="ri-row"><span>📆 Días para cierre</span><strong id="ri-dias">—</strong></div>
+      <div class="ri-row"><span>📞 Gestiones hoy</span><strong id="ri-gest">—</strong></div>
+      <div class="ri-row warn"><span>⚠️ Promesas vencidas</span><strong id="ri-prom">—</strong></div>
+    </div>
+    <button class="btn-pri btn-full" onclick="document.getElementById('resumen-inicial').style.display='none'">¡A cobrar! 💪</button>
+  </div>
+</div>
+
+<!-- ═══ CELEBRACIÓN ═══ -->
+<div id="celebracion" class="cel-overlay" style="display:none">
+  <div id="confetti"></div>
+  <div class="cel-card">
+    <div class="cel-icon">🎉</div>
+    <h2 class="cel-title">¡Cobro Exitoso!</h2>
+    <p class="cel-monto" id="cel-monto">L 0.00</p>
+    <p class="cel-sub">¡Sigue así! 🔥</p>
+  </div>
+</div>
+
+<!-- ═══ LOGIN ═══ -->
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <div class="login-logo">💼</div>
+    <h1 class="login-title">Cobros Pro</h1>
+    <p class="login-sub">Sistema de Gestión de Cobros</p>
+    <div class="login-form">
+      <select id="login-usuario" class="login-input"><option value="">Seleccionar usuario...</option></select>
+      <input type="password" id="login-pass" class="login-input" placeholder="Contraseña">
+      <button class="login-btn" onclick="iniciarSesion()">Ingresar</button>
+      <p id="login-error" class="login-error"></p>
     </div>
   </div>
+</div>
 
-  <!-- ═══ APP ═══ -->
-  <div id="app-container" class="app-container" style="display:none">
-    <!-- SIDEBAR -->
-    <nav id="sidebar" class="sidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-brand"><span class="brand-icon">💼</span><div class="brand-text"><span class="brand-name">Cobros Pro</span><span class="brand-sub" id="sidebar-user-role">Gestor</span></div></div>
-        <button id="btn-collapse" class="btn-collapse" onclick="toggleSidebar()">◀</button>
+<!-- ═══ APP ═══ -->
+<div id="app-container" class="app-container" style="display:none">
+
+  <!-- SIDEBAR -->
+  <nav id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-brand">
+        <span class="brand-icon">💼</span>
+        <div class="brand-text">
+          <span class="brand-name">Cobros Pro</span>
+          <span class="brand-sub" id="sidebar-user-role">Gestor</span>
+        </div>
       </div>
-      <div class="sidebar-menu" id="sidebar-menu"></div>
-      <div class="sidebar-footer">
-        <div class="user-info"><span class="user-avatar" id="user-avatar">G</span><div class="brand-text"><span class="user-name" id="user-name">Usuario</span><span class="user-role" id="user-role-label">Gestor</span></div></div>
-        <button class="btn-logout" onclick="cerrarSesion()"><span class="menu-label">Salir</span> 🚪</button>
+      <button id="btn-collapse" class="btn-collapse" onclick="toggleSidebar()">◀</button>
+    </div>
+    <div class="sidebar-menu" id="sidebar-menu"></div>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <span class="user-avatar" id="user-avatar">G</span>
+        <div class="brand-text">
+          <span class="user-name" id="user-name">Usuario</span>
+          <span class="user-role" id="user-role-label">Gestor</span>
+        </div>
       </div>
-    </nav>
-    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+      <button class="btn-logout" onclick="cerrarSesion()"><span class="menu-label">Salir</span> 🚪</button>
+    </div>
+  </nav>
+  <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
-    <!-- MAIN -->
-    <main id="main" class="main">
-      <div class="mobile-header">
-        <button class="btn-mobile" onclick="toggleSidebar()">☰</button>
-        <span class="mobile-title">Cobros Pro</span>
-        <button class="btn-mobile" onclick="cargarTodosDatos()">🔄</button>
-      </div>
+  <!-- MAIN -->
+  <main id="main" class="main">
+    <div class="mobile-header">
+      <button class="btn-mobile" onclick="toggleSidebar()">☰</button>
+      <span class="mobile-title">Cobros Pro</span>
+      <button class="btn-mobile" onclick="cargarTodosDatos()">🔄</button>
+    </div>
+    <div id="loading" class="loading" style="display:none"><div class="spinner"></div><p>Cargando datos...</p></div>
 
-      <div id="loading" class="loading" style="display:none"><div class="spinner"></div><p>Cargando datos...</p></div>
-
-      <!-- TAB: DASHBOARD -->
-      <div id="tab-dashboard" class="tab active">
-        <div class="page-header">
-          <div><h2 class="page-title">Dashboard</h2><p class="page-sub" id="ciclo-info"></p></div>
+    <!-- ── DASHBOARD ── -->
+    <div id="tab-dashboard" class="tab active">
+      <div class="page-header">
+        <div>
+          <h2 class="page-title">Dashboard</h2>
+          <p class="page-sub" id="ciclo-info"></p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
           <div id="dias-cierre" class="badge-cierre"></div>
         </div>
-        <!-- Fila highlight -->
-        <div class="stats-row">
-          <div class="stat-card glow-green"><div class="stat-body"><span class="stat-label">Cobrado Hoy</span><span class="stat-value" id="s-cobrado-hoy">L 0.00</span><span class="stat-sub" id="s-cobros-count">0 cobros</span></div><div class="stat-icon gi-green">💵</div></div>
-          <div class="stat-card glow-blue"><div class="stat-body"><span class="stat-label">% Cobro Ciclo</span><span class="stat-value" id="s-pct">0%</span><span class="stat-sub" id="s-pct-det"></span></div><div class="stat-icon gi-blue">📊</div></div>
-          <div class="stat-card glow-purple"><div class="stat-body"><span class="stat-label">Proyección Cierre</span><span class="stat-value" id="s-proyeccion">L 0.00</span><span class="stat-sub" id="s-proy-pct"></span></div><div class="stat-icon gi-purple">🎯</div></div>
-          <div class="stat-card glow-red"><div class="stat-body"><span class="stat-label">Falta para Meta</span><span class="stat-value" id="s-falta-meta">L 0.00</span><span class="stat-sub" id="s-falta-det"></span></div><div class="stat-icon gi-red">🔥</div></div>
+      </div>
+
+      <!-- Meta configurable -->
+      <div class="meta-bar">
+        <span>🎯 Meta del ciclo: <strong id="meta-valor">—</strong></span>
+        <button class="btn-sec btn-sm" onclick="editarMeta()">✏️ Editar</button>
+      </div>
+
+      <!-- Stats principales -->
+      <div class="stats-row">
+        <div class="stat-card glow-green"><div class="stat-body"><span class="stat-label">Cobrado Hoy</span><span class="stat-value" id="s-cobrado-hoy">L 0.00</span><span class="stat-sub" id="s-cobros-count">0 cobros</span></div><div class="stat-icon gi-green">💵</div></div>
+        <div class="stat-card glow-blue"><div class="stat-body"><span class="stat-label">% vs Meta</span><span class="stat-value" id="s-pct">0%</span><span class="stat-sub" id="s-pct-det"></span></div><div class="stat-icon gi-blue">📊</div></div>
+        <div class="stat-card glow-purple"><div class="stat-body"><span class="stat-label">Proyección</span><span class="stat-value" id="s-proyeccion">L 0.00</span><span class="stat-sub" id="s-proy-pct"></span></div><div class="stat-icon gi-purple">🎯</div></div>
+        <div class="stat-card glow-red"><div class="stat-body"><span class="stat-label">Falta para Meta</span><span class="stat-value" id="s-falta-meta">L 0.00</span><span class="stat-sub" id="s-falta-det"></span></div><div class="stat-icon gi-red">🔥</div></div>
+      </div>
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-body"><span class="stat-label">Cartera Total</span><span class="stat-value" id="s-cartera">L 0.00</span><span class="stat-sub" id="s-clientes"></span></div><div class="stat-icon gi-blue">💼</div></div>
+        <div class="stat-card"><div class="stat-body"><span class="stat-label">Cuotas Pendientes</span><span class="stat-value" id="s-cuotas">L 0.00</span><span class="stat-sub">Este ciclo</span></div><div class="stat-icon gi-yellow">📅</div></div>
+        <div class="stat-card"><div class="stat-body"><span class="stat-label">Recuperado Ciclo</span><span class="stat-value" id="s-recup">L 0.00</span><span class="stat-sub" id="s-recup-count"></span></div><div class="stat-icon gi-green">💰</div></div>
+        <div class="stat-card"><div class="stat-body"><span class="stat-label">Gestiones Hoy</span><span class="stat-value" id="s-gest">0</span><span class="stat-sub" id="s-contact"></span></div><div class="stat-icon gi-purple">📞</div></div>
+      </div>
+
+      <div class="dash-grid">
+        <div class="card"><h3 class="card-title">Avance del Ciclo</h3><div id="progress-bars"></div></div>
+        <div class="card"><h3 class="card-title">Gestiones de Hoy</h3><div id="estados-hoy"></div></div>
+      </div>
+
+      <!-- Gráfico cobro diario -->
+      <div class="card"><h3 class="card-title">📈 Cobro Diario (últimos 14 días)</h3><div id="grafico-cobro"></div></div>
+
+      <div class="dash-grid">
+        <!-- Desglose capital vs intereses -->
+        <div class="card">
+          <h3 class="card-title">💳 Desglose de Recuperación</h3>
+          <div class="erow"><div class="erow-l"><span>🏦</span><span>Capital</span></div><span id="desglose-capital" style="color:var(--green);font-weight:600">L 0.00</span></div>
+          <div class="erow"><div class="erow-l"><span>📈</span><span>Intereses</span></div><span id="desglose-intereses" style="color:var(--blue);font-weight:600">L 0.00</span></div>
+          <h4 class="card-title" style="margin-top:12px;font-size:12px">Métodos de Pago</h4>
+          <div id="metodos-pago"></div>
         </div>
-        <div class="stats-row">
-          <div class="stat-card"><div class="stat-body"><span class="stat-label">Cartera Total</span><span class="stat-value" id="s-cartera">L 0.00</span><span class="stat-sub" id="s-clientes"></span></div><div class="stat-icon gi-blue">💼</div></div>
-          <div class="stat-card"><div class="stat-body"><span class="stat-label">Cuotas Pendientes</span><span class="stat-value" id="s-cuotas">L 0.00</span><span class="stat-sub">Este ciclo</span></div><div class="stat-icon gi-yellow">📅</div></div>
-          <div class="stat-card"><div class="stat-body"><span class="stat-label">Recuperado Ciclo</span><span class="stat-value" id="s-recup">L 0.00</span><span class="stat-sub" id="s-recup-count"></span></div><div class="stat-icon gi-green">💰</div></div>
-          <div class="stat-card"><div class="stat-body"><span class="stat-label">Gestiones Hoy</span><span class="stat-value" id="s-gest">0</span><span class="stat-sub" id="s-contact"></span></div><div class="stat-icon gi-purple">📞</div></div>
+        <!-- Mini ranking hoy -->
+        <div class="card"><h3 class="card-title">🏆 Top Gestores Hoy</h3><div id="mini-ranking"></div></div>
+      </div>
+
+      <!-- Mora por antigüedad -->
+      <div class="card"><h3 class="card-title">📊 Antigüedad de Cartera</h3><div id="mora-antiguedad"></div></div>
+
+      <!-- Promesas vencidas -->
+      <div id="promesas-box" class="card card-warn" style="display:none">
+        <h3 class="card-title tw">⚠️ Promesas Vencidas (<span id="prom-count">0</span>)</h3>
+        <div id="prom-list"></div>
+      </div>
+    </div>
+
+    <!-- ── CARTERA ── -->
+    <div id="tab-cartera" class="tab">
+      <h2 class="page-title">Cartera de Clientes</h2>
+      <div class="filters" id="cartera-filters">
+        <input type="text" id="f-texto" class="fi" placeholder="🔍 Buscar cliente..." oninput="filtrarCartera()">
+        <select id="f-ds" class="fi" onchange="filtrarCartera()">
+          <option value="">Día semana</option>
+          <option value="lunes">Lunes</option><option value="martes">Martes</option>
+          <option value="miércoles">Miércoles</option><option value="jueves">Jueves</option>
+          <option value="viernes">Viernes</option><option value="sábado">Sábado</option>
+        </select>
+        <select id="f-dm" class="fi" onchange="filtrarCartera()"><option value="">Día mes</option></select>
+        <select id="f-est" class="fi" onchange="filtrarCartera()"><option value="">Estado</option></select>
+        <select id="f-cart" class="fi" onchange="filtrarCartera()"><option value="">Todas las carteras</option></select>
+        <select id="f-ord" class="fi" onchange="filtrarCartera()">
+          <option value="prioridad">🔝 Prioridad</option>
+          <option value="riesgo">🔴 Mayor riesgo</option>
+          <option value="mora">⏱ Mayor mora</option>
+          <option value="balance_desc">Mayor balance</option>
+          <option value="balance_asc">Menor balance</option>
+          <option value="cuotas_desc">Mayor cuota</option>
+          <option value="nombre">Nombre A-Z</option>
+        </select>
+      </div>
+      <p class="count" id="c-count"></p>
+      <div id="c-list" class="list"></div>
+    </div>
+
+    <!-- ── GESTIÓN HOY ── -->
+    <div id="tab-hoy" class="tab">
+      <h2 class="page-title">Gestión de Hoy</h2>
+      <p class="page-sub" id="hoy-info"></p>
+      <div class="hoy-stats-bar" id="hoy-stats"></div>
+      <div id="hoy-pend"></div>
+      <div id="hoy-done"></div>
+      <div id="hoy-empty" class="empty" style="display:none"><span class="empty-icon">📭</span><span>No hay clientes programados para hoy</span></div>
+    </div>
+
+    <!-- ── HISTORIAL ── -->
+    <div id="tab-historial" class="tab">
+      <h2 class="page-title">Historial de Gestiones</h2>
+      <div class="filters">
+        <input type="date" id="fh-date" class="fi" onchange="filtrarHistorial()">
+        <select id="fh-est" class="fi" onchange="filtrarHistorial()"><option value="">Todos los estados</option></select>
+        <button class="btn-sec" onclick="limpiarFiltrosHist()">Limpiar</button>
+      </div>
+      <p class="count" id="h-count"></p>
+      <div id="h-list" class="list"></div>
+    </div>
+
+    <!-- ── PAGOS ── -->
+    <div id="tab-pagos" class="tab">
+      <h2 class="page-title">Pagos Realizados</h2>
+      <div class="filters">
+        <input type="text" id="fp-txt" class="fi" placeholder="🔍 Buscar..." oninput="filtrarPagos()">
+        <select id="fp-medio" class="fi" onchange="filtrarPagos()">
+          <option value="">Todos los medios</option>
+          <option value="efectivo">💵 Efectivo</option>
+          <option value="transferencia">🏦 Transferencia</option>
+          <option value="cheque">📄 Cheque</option>
+        </select>
+        <div class="badge-total" id="p-total">L 0.00</div>
+      </div>
+      <div id="p-list" class="list"></div>
+    </div>
+
+    <!-- ── RANKING ── -->
+    <div id="tab-ranking" class="tab">
+      <h2 class="page-title">Ranking de Gestores</h2>
+      <p class="page-sub">Ciclo actual · Basado en cobros registrados</p>
+      <div id="mejor-hora" class="meta-bar" style="margin-bottom:12px"></div>
+      <div id="ranking-list" class="list"></div>
+    </div>
+
+    <!-- ── LOGROS ── -->
+    <div id="tab-logros" class="tab">
+      <h2 class="page-title">Mis Logros</h2>
+      <!-- Nivel y barra gamificada -->
+      <div class="game-header">
+        <div class="game-nivel">
+          <span id="g-nivel-icon" class="nivel-icon">🥉</span>
+          <div>
+            <div id="g-nivel-name" class="nivel-name">Novato</div>
+            <div id="g-puntos" class="nivel-pts">0 pts</div>
+          </div>
+          <div class="racha-badge">🔥 <span id="g-racha">0</span> días</div>
         </div>
-        <div class="dash-grid">
-          <div class="card"><h3 class="card-title">Avance del Ciclo</h3><div id="progress-bars"></div></div>
-          <div class="card"><h3 class="card-title">Gestiones de Hoy</h3><div id="estados-hoy"></div></div>
+        <div class="nivel-bar-wrap">
+          <div class="nivel-bar"><div id="g-nivel-bar" class="nivel-bar-fill" style="width:0%"></div></div>
+          <div id="g-nivel-prox" class="nivel-prox"></div>
         </div>
-        <div id="promesas-box" class="card card-warn" style="display:none"><h3 class="card-title tw">⚠️ Promesas Vencidas (<span id="prom-count">0</span>)</h3><div id="prom-list"></div></div>
       </div>
+      <!-- Stats hoy -->
+      <div class="stats-row" style="margin-bottom:12px">
+        <div class="stat-card"><div class="stat-body"><span class="stat-label">Gestiones hoy</span><span class="stat-value" id="g-gest-hoy">0</span></div><div class="stat-icon gi-blue">📞</div></div>
+        <div class="stat-card"><div class="stat-body"><span class="stat-label">Cobros hoy</span><span class="stat-value" id="g-cobros-hoy">0</span></div><div class="stat-icon gi-green">✅</div></div>
+        <div class="stat-card"><div class="stat-body"><span class="stat-label">Cobrado hoy</span><span class="stat-value" id="g-cobrado-hoy">L 0.00</span></div><div class="stat-icon gi-yellow">💰</div></div>
+      </div>
+      <!-- Grid de logros -->
+      <h3 class="card-title" style="margin-bottom:8px">🎖️ Logros del día</h3>
+      <div id="logros-grid" class="logros-grid"></div>
+    </div>
 
-      <!-- TAB: CARTERA -->
-      <div id="tab-cartera" class="tab">
-        <h2 class="page-title">Cartera de Clientes</h2>
-        <div class="filters" id="cartera-filters">
-          <input type="text" id="f-texto" class="fi" placeholder="🔍 Buscar cliente..." oninput="filtrarCartera()">
-          <select id="f-ds" class="fi" onchange="filtrarCartera()"><option value="">Día semana</option><option value="lunes">Lunes</option><option value="martes">Martes</option><option value="miércoles">Miércoles</option><option value="jueves">Jueves</option><option value="viernes">Viernes</option><option value="sábado">Sábado</option></select>
-          <select id="f-dm" class="fi" onchange="filtrarCartera()"><option value="">Día del mes</option></select>
-          <select id="f-est" class="fi" onchange="filtrarCartera()"><option value="">Estado</option></select>
-          <select id="f-ord" class="fi" onchange="filtrarCartera()"><option value="balance_desc">Mayor balance</option><option value="balance_asc">Menor balance</option><option value="cuotas_desc">Mayor cuota</option><option value="nombre">Nombre A-Z</option></select>
-        </div>
-        <p class="count" id="c-count"></p>
-        <div id="c-list" class="list"></div>
-      </div>
+    <!-- ── USUARIOS ── -->
+    <div id="tab-usuarios" class="tab">
+      <h2 class="page-title">Gestión de Usuarios</h2>
+      <p class="page-sub">Usuarios cargados desde Google Sheets → hoja <b>Usuarios</b></p>
+      <div id="users-list" class="list"></div>
+    </div>
+  </main>
+</div>
 
-      <!-- TAB: GESTIÓN HOY -->
-      <div id="tab-hoy" class="tab">
-        <h2 class="page-title">Gestión de Hoy</h2>
-        <p class="page-sub" id="hoy-info"></p>
-        <div id="hoy-pend"></div>
-        <div id="hoy-done"></div>
-        <div id="hoy-empty" class="empty" style="display:none"><span class="empty-icon">📭</span><span>No hay clientes programados para hoy</span></div>
+<!-- ═══ MODAL GESTIONAR ═══ -->
+<div id="modal" class="modal-overlay" style="display:none" onclick="cerrarModal(event)">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <div>
+        <h3 class="modal-title" id="m-nombre"></h3>
+        <p class="modal-sub" id="m-info"></p>
       </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="m-timer" class="timer-badge">⏱ 00:00</span>
+        <button class="btn-x" onclick="cerrarModal()">✕</button>
+      </div>
+    </div>
 
-      <!-- TAB: HISTORIAL -->
-      <div id="tab-historial" class="tab">
-        <h2 class="page-title">Historial de Gestiones</h2>
-        <div class="filters"><input type="date" id="fh-date" class="fi" onchange="filtrarHistorial()"><select id="fh-est" class="fi" onchange="filtrarHistorial()"><option value="">Todos</option></select><button class="btn-sec" onclick="limpiarFiltrosHist()">Limpiar</button></div>
-        <p class="count" id="h-count"></p>
-        <div id="h-list" class="list"></div>
-      </div>
+    <!-- Préstamos activos -->
+    <div class="modal-sec" id="m-prest-sec">
+      <h4 class="sec-title">Préstamos Activos</h4>
+      <div id="m-prest"></div>
+    </div>
 
-      <!-- TAB: PAGOS -->
-      <div id="tab-pagos" class="tab">
-        <h2 class="page-title">Pagos Realizados</h2>
-        <div class="filters"><input type="text" id="fp-txt" class="fi" placeholder="🔍 Buscar..." oninput="filtrarPagos()"><div class="badge-total" id="p-total">L 0.00</div></div>
-        <div id="p-list" class="list"></div>
-      </div>
+    <!-- Plantillas WhatsApp -->
+    <div class="modal-sec">
+      <div id="m-plantillas"></div>
+    </div>
 
-      <!-- TAB: USUARIOS (solo admin) -->
-      <div id="tab-usuarios" class="tab">
-        <h2 class="page-title">Gestión de Usuarios</h2>
-        <p class="page-sub">Administrar gestores, supervisores y gerentes</p>
-        <div id="users-list" class="list"></div>
+    <!-- Registrar gestión -->
+    <div class="modal-sec">
+      <h4 class="sec-title">Registrar Gestión</h4>
+      <div class="estados-grid" id="m-estados"></div>
+      <div id="m-monto-box" class="fg" style="display:none">
+        <label class="fl">Monto Pagado (L)</label>
+        <input type="number" id="m-monto" class="fi fi-full" placeholder="0.00" step="0.01" min="0">
       </div>
-    </main>
-  </div>
+      <div id="m-medio-box" class="fg" style="display:none">
+        <label class="fl">Medio de Pago</label>
+        <select id="m-medio-pago" class="fi fi-full">
+          <option value="efectivo">💵 Efectivo</option>
+          <option value="transferencia">🏦 Transferencia</option>
+          <option value="cheque">📄 Cheque</option>
+        </select>
+      </div>
+      <div id="m-prom-date-box" class="fg" style="display:none">
+        <label class="fl">Fecha de Promesa</label>
+        <input type="date" id="m-prom-date" class="fi fi-full">
+      </div>
+      <div id="m-prom-monto-box" class="fg" style="display:none">
+        <label class="fl">Monto Prometido (L)</label>
+        <input type="number" id="m-prom-monto" class="fi fi-full" placeholder="0.00" step="0.01" min="0">
+      </div>
+      <div class="fg">
+        <label class="fl">Comentario</label>
+        <textarea id="m-comment" class="fi-ta" placeholder="Notas..." rows="3"></textarea>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button id="m-save" class="btn-pri" style="flex:1" onclick="guardarGestion()" disabled>Guardar Gestión</button>
+        <button class="btn-sec" onclick="cerrarModal()">Cancelar</button>
+      </div>
+    </div>
 
-  <!-- ═══ MODAL GESTIONAR ═══ -->
-  <div id="modal" class="modal-overlay" style="display:none" onclick="cerrarModal(event)">
-    <div class="modal-card" onclick="event.stopPropagation()">
-      <div class="modal-head"><div><h3 class="modal-title" id="m-nombre"></h3><p class="modal-sub" id="m-info"></p></div><button class="btn-x" onclick="cerrarModal()">✕</button></div>
-      <div class="modal-sec" id="m-prest-sec"><h4 class="sec-title">Préstamos Activos</h4><div id="m-prest"></div></div>
-      <div class="modal-sec">
-        <h4 class="sec-title">Registrar Gestión</h4>
-        <div class="estados-grid" id="m-estados"></div>
-        <div id="m-monto-box" class="fg" style="display:none"><label class="fl">Monto Pagado (L)</label><input type="number" id="m-monto" class="fi fi-full" placeholder="0.00" step="0.01" min="0"></div>
-        <div id="m-prom-date-box" class="fg" style="display:none"><label class="fl">Fecha de Promesa</label><input type="date" id="m-prom-date" class="fi fi-full"></div>
-        <div id="m-prom-monto-box" class="fg" style="display:none"><label class="fl">Monto Prometido (L)</label><input type="number" id="m-prom-monto" class="fi fi-full" placeholder="0.00" step="0.01" min="0"></div>
-        <div class="fg"><label class="fl">Comentario</label><textarea id="m-comment" class="fi-ta" placeholder="Notas..." rows="3"></textarea></div>
-        <button id="m-save" class="btn-pri btn-full" onclick="guardarGestion()" disabled>Guardar Gestión</button>
-      </div>
-      <div class="modal-sec" id="m-hist-sec" style="display:none"><h4 class="sec-title">Historial</h4><div id="m-hist"></div></div>
+    <!-- Historial de contactabilidad -->
+    <div class="modal-sec" id="m-hist-sec" style="display:none">
+      <h4 class="sec-title">📋 Historial de Contactos</h4>
+      <div id="m-hist"></div>
     </div>
   </div>
+</div>
 
-  <div id="toast" class="toast" style="display:none"></div>
+<div id="toast" class="toast" style="display:none"></div>
 
-  <script src="js/config.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/app.js"></script>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
